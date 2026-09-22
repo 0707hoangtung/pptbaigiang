@@ -14,7 +14,9 @@ import {
   Minimize2, 
   Radio,
   Tv,
-  Zap
+  Zap,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -129,6 +131,8 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
         handlePrev();
       } else if (e.key.toLowerCase() === 'b') {
         setIsBlackScreen(prev => !prev);
+      } else if (e.key.toLowerCase() === 'h') {
+        setShowControls(prev => !prev);
       }
     };
 
@@ -227,7 +231,9 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
       {/* Slide Presentation Screen */}
       <div
         className={`relative shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer ${
-          aspectRatio === '16:9' ? 'w-full max-w-[96vw] max-h-[92vh] aspect-video' : 'w-full max-w-[85vw] max-h-[92vh] aspect-4/3'
+          aspectRatio === '16:9'
+            ? (showControls ? 'w-full max-w-[96vw] max-h-[92vh] aspect-video' : 'w-full max-w-[99vw] max-h-[98vh] aspect-video')
+            : (showControls ? 'w-full max-w-[85vw] max-h-[92vh] aspect-4/3' : 'w-full max-w-[92vw] max-h-[98vh] aspect-4/3')
         }`}
         style={{
           background: currentSlide?.backgroundGradient || slideBg
@@ -330,14 +336,16 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
 
       {/* Presenter Bottom Control Bar */}
       <div 
-        className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-950/85 backdrop-blur-md border border-white/20 rounded-full px-4 py-1.5 flex items-center space-x-3 text-white text-xs z-50 shadow-2xl"
+        className={`absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-950/85 backdrop-blur-md border border-white/20 rounded-full px-4 py-1.5 flex items-center space-x-3 text-white text-xs z-50 shadow-2xl transition-all duration-300 ${
+          showControls ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-20 opacity-0 pointer-events-none'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Previous Slide / Step */}
         <button
           onClick={handlePrev}
           disabled={currentIndex === 0 && revealedStep === 0}
-          className="p-1 rounded-full hover:bg-white/20 disabled:opacity-30 transition"
+          className="p-1 rounded-full hover:bg-white/20 disabled:opacity-30 transition cursor-pointer"
           title="Lùi bước / Trang trước (Mũi tên trái / Backspace)"
         >
           <ChevronLeft size={18} />
@@ -352,7 +360,7 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
         <button
           onClick={handleNext}
           disabled={currentIndex === slides.length - 1 && revealedStep >= animatedElements.length}
-          className="p-1 rounded-full hover:bg-white/20 disabled:opacity-30 transition"
+          className="p-1 rounded-full hover:bg-white/20 disabled:opacity-30 transition cursor-pointer"
           title="Tiếp tục: Chạy hiệu ứng / Sang trang (Mũi tên phải / Space / Click)"
         >
           <ChevronRight size={18} />
@@ -386,7 +394,7 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
             setIsLaserPointer(!isLaserPointer);
             if (!isLaserPointer) setIsPenActive(false);
           }}
-          className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition ${
+          className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
             isLaserPointer ? 'bg-red-600 text-white shadow-lg' : 'hover:bg-white/20 text-slate-300'
           }`}
           title="Bật/tắt con trỏ laser chỉ bài"
@@ -401,7 +409,7 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
             setIsPenActive(!isPenActive);
             if (!isPenActive) setIsLaserPointer(false);
           }}
-          className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition ${
+          className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
             isPenActive ? 'bg-blue-600 text-white' : 'hover:bg-white/20 text-slate-300'
           }`}
           title="Bật bút vẽ chú thích trực tiếp lên màn hình"
@@ -416,13 +424,13 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
               <button
                 key={c}
                 onClick={() => setPenColor(c)}
-                className={`w-3.5 h-3.5 rounded-full border border-white/40 ${penColor === c ? 'scale-125 ring-2 ring-white' : ''}`}
+                className={`w-3.5 h-3.5 rounded-full border border-white/40 cursor-pointer ${penColor === c ? 'scale-125 ring-2 ring-white' : ''}`}
                 style={{ backgroundColor: c }}
               />
             ))}
             <button
               onClick={clearDrawings}
-              className="p-1 hover:bg-white/20 rounded-full text-slate-300"
+              className="p-1 hover:bg-white/20 rounded-full text-slate-300 cursor-pointer"
               title="Xóa nét vẽ"
             >
               <Eraser size={13} />
@@ -435,7 +443,7 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
         {/* Teacher Notes Toggle */}
         <button
           onClick={() => setIsNotesOpen(!isNotesOpen)}
-          className={`p-1.5 rounded-full transition ${isNotesOpen ? 'bg-amber-500 text-slate-900 font-bold' : 'hover:bg-white/20 text-slate-300'}`}
+          className={`p-1.5 rounded-full transition cursor-pointer ${isNotesOpen ? 'bg-amber-500 text-slate-900 font-bold' : 'hover:bg-white/20 text-slate-300'}`}
           title="Mở ghi chú lời giảng"
         >
           <FileText size={15} />
@@ -444,7 +452,7 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
         {/* Confetti Celebration for Students */}
         <button
           onClick={handleTriggerConfetti}
-          className="p-1.5 rounded-full hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 transition"
+          className="p-1.5 rounded-full hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 transition cursor-pointer"
           title="Bắn pháo hoa khen ngợi học sinh trả lời đúng!"
         >
           <Sparkles size={15} />
@@ -462,15 +470,42 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
           </div>
         </div>
 
+        {/* Hide Controls Button to optimize presentation area */}
+        <button
+          onClick={() => setShowControls(false)}
+          className="p-1.5 rounded-full hover:bg-white/20 text-slate-300 hover:text-amber-300 transition cursor-pointer ml-0.5"
+          title="Ẩn thanh công cụ (Phím tắt: H) để tối ưu diện tích trình chiếu"
+        >
+          <EyeOff size={16} />
+        </button>
+
         {/* Exit Presentation */}
         <button
           onClick={onClose}
-          className="p-1.5 rounded-full hover:bg-red-600 text-slate-300 hover:text-white transition ml-1"
+          className="p-1.5 rounded-full hover:bg-red-600 text-slate-300 hover:text-white transition cursor-pointer"
           title="Thoát trình chiếu (Esc)"
         >
           <X size={16} />
         </button>
       </div>
+
+      {/* Compact Floating Show Controls Button when hidden */}
+      {!showControls && (
+        <div 
+          className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => setShowControls(true)}
+            className="group px-3.5 py-1.5 rounded-full bg-slate-950/80 hover:bg-slate-900/95 text-slate-200 hover:text-white border border-white/20 hover:border-amber-400/50 backdrop-blur-md shadow-2xl flex items-center gap-2 text-xs transition-all duration-200 cursor-pointer"
+            title="Hiện lại thanh công cụ trình chiếu (Phím tắt: H)"
+          >
+            <Eye size={15} className="text-amber-400 group-hover:scale-110 transition-transform" />
+            <span className="font-semibold text-[11px] tracking-wide">Hiện công cụ</span>
+            <span className="text-[10px] text-amber-300/80 font-mono bg-white/10 px-1.5 py-0.5 rounded-full border border-white/10">Phím H</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };
