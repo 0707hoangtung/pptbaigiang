@@ -1,0 +1,10 @@
+{
+  "name": "Remix Remix KHO BÀI GIẢNG",
+  "description": "Ứng dụng trình chiếu và quản lý bài giảng chuyên nghiệp phong cách PowerPoint, hỗ trợ nhập file PowerPoint (.pptx) từ máy tính để trình chiếu hoặc chỉnh sửa, cùng kho bài mẫu và công cụ tương tác lớp học.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

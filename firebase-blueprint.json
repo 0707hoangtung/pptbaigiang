@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "Presentation": {
+      "title": "Presentation",
+      "description": "A slide lecture presentation containing slides, elements, themes, and animations.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique presentation ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the presentation"
+        },
+        "aspectRatio": {
+          "type": "string",
+          "description": "Screen aspect ratio (16:9 or 4:3)"
+        },
+        "themeId": {
+          "type": "string",
+          "description": "Theme preset identifier"
+        },
+        "author": {
+          "type": "string",
+          "description": "Author of the presentation"
+        },
+        "subject": {
+          "type": "string",
+          "description": "Subject of the presentation"
+        },
+        "grade": {
+          "type": "string",
+          "description": "Grade level"
+        },
+        "slidesJson": {
+          "type": "string",
+          "description": "Serialized JSON string of the slides array ensuring full fidelity and offline caching"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        },
+        "lastEditorClientId": {
+          "type": "string",
+          "description": "Client ID of the last editor device"
+        }
+      },
+      "required": ["id", "title", "slidesJson", "updatedAt"]
+    },
+    "AppState": {
+      "title": "AppState",
+      "description": "Global active state indicating the currently opened presentation for collaborative synchronization",
+      "type": "object",
+      "properties": {
+        "activePresentationId": {
+          "type": "string",
+          "description": "ID of current active presentation"
+        },
+        "initialized": {
+          "type": "boolean",
+          "description": "Whether the cloud library has been initialized with default lectures"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last active change"
+        },
+        "lastEditorClientId": {
+          "type": "string",
+          "description": "Client ID of the last active editor"
+        }
+      },
+      "required": ["activePresentationId", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/presentations/{presentationId}": {
+      "schema": "Presentation",
+      "description": "Shared repository of all presentations accessible across all devices"
+    },
+    "/system/{systemDocId}": {
+      "schema": "AppState",
+      "description": "Global application state synchronization document"
+    }
+  }
+}

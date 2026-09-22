@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  }
+}
+
+/* Custom PowerPoint thin scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Print styles for export to PDF or paper */
+@media print {
+  body {
+    background: white !important;
+    overflow: visible !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-slide-page {
+    page-break-after: always;
+    break-after: page;
+    width: 100vw !important;
+    height: 56.25vw !important;
+    max-height: 100vh !important;
+  }
+}
+
+/* Ensure KaTeX math formulas blend seamlessly inline with surrounding text */
+.katex {
+  font-size: 1.05em !important;
+  color: inherit !important;
+  white-space: nowrap !important;
+}
+
+.katex-html {
+  white-space: nowrap !important;
+}
+
+/* 4 Hiệu ứng cơ bản chuẩn PowerPoint cho từng khối */
+@keyframes ppt-appear {
+  0% { opacity: 0; }
+  1% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@keyframes ppt-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes ppt-fly-in {
+  0% {
+    opacity: 0;
+    transform: translateY(60px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ppt-zoom-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-ppt-appear {
+  animation: ppt-appear 0.05s ease-out forwards;
+}
+
+.animate-ppt-fade-in {
+  animation: ppt-fade-in 0.45s ease-out forwards;
+}
+
+.animate-ppt-fly-in {
+  animation: ppt-fly-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-ppt-zoom-in {
+  animation: ppt-zoom-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

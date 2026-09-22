@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidPresentation(id, data) {
+      return data.keys().hasAll(['id', 'title', 'slidesJson', 'updatedAt']) &&
+             data.id is string && data.id == id && data.id.size() <= 128 &&
+             data.title is string && data.title.size() <= 1000 &&
+             data.slidesJson is string && data.slidesJson.size() <= 5000000 &&
+             data.updatedAt is string && data.updatedAt.size() <= 128 &&
+             (!('aspectRatio' in data) || (data.aspectRatio is string && data.aspectRatio.size() <= 16)) &&
+             (!('themeId' in data) || (data.themeId is string && data.themeId.size() <= 128)) &&
+             (!('author' in data) || (data.author is string && data.author.size() <= 500)) &&
+             (!('subject' in data) || (data.subject is string && data.subject.size() <= 500)) &&
+             (!('grade' in data) || (data.grade is string && data.grade.size() <= 200)) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 128)) &&
+             (!('lastEditorClientId' in data) || (data.lastEditorClientId is string && data.lastEditorClientId.size() <= 128));
+    }
+
+    function isValidAppState(data) {
+      return data.keys().hasAll(['activePresentationId', 'updatedAt']) &&
+             data.activePresentationId is string && data.activePresentationId.size() <= 128 &&
+             data.updatedAt is string && data.updatedAt.size() <= 128 &&
+             (!('initialized' in data) || data.initialized is bool) &&
+             (!('deletedLibraryIds' in data) || data.deletedLibraryIds is list) &&
+             (!('lastEditorClientId' in data) || (data.lastEditorClientId is string && data.lastEditorClientId.size() <= 128));
+    }
+
+    match /presentations/{presentationId} {
+      allow read: if true;
+      allow create, update: if isValidId(presentationId) && isValidPresentation(presentationId, request.resource.data);
+      allow delete: if isValidId(presentationId);
+    }
+
+    match /system/{systemDocId} {
+      allow read: if true;
+      allow create, update: if isValidId(systemDocId) && isValidAppState(request.resource.data);
+      allow delete: if false;
+    }
+  }
+}
