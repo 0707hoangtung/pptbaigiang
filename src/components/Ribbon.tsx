@@ -60,6 +60,7 @@ interface RibbonProps {
   onTriggerConfetti: () => void;
   onOpenRepository: () => void;
   onOpenImportPptx?: () => void;
+  onExportPPTX?: () => void;
 }
 
 export const Ribbon: React.FC<RibbonProps> = ({
@@ -109,7 +110,8 @@ export const Ribbon: React.FC<RibbonProps> = ({
   onPresenterMode,
   onTriggerConfetti,
   onOpenRepository,
-  onOpenImportPptx
+  onOpenImportPptx,
+  onExportPPTX
 }) => {
   const tabs: { id: ActiveTab; label: string; highlight?: boolean }[] = [
     { id: 'file', label: 'Tệp' },
@@ -166,6 +168,7 @@ export const Ribbon: React.FC<RibbonProps> = ({
             onSendBackward={onSendBackward}
             onAddSlide={onAddSlide}
             onOpenImportPptx={onOpenImportPptx}
+            onExportPPTX={onExportPPTX}
             onSave={onSave}
           />
         )}

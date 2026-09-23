@@ -19,7 +19,8 @@ import {
   PlusSquare,
   Sparkles,
   FileUp,
-  Save
+  Save,
+  Download
 } from 'lucide-react';
 import { SlideElement } from '../types/presentation';
 
@@ -32,6 +33,7 @@ interface HomeRibbonProps {
   onSendBackward: () => void;
   onAddSlide: () => void;
   onOpenImportPptx?: () => void;
+  onExportPPTX?: () => void;
   onSave?: () => void;
 }
 
@@ -60,6 +62,7 @@ export const HomeRibbon: React.FC<HomeRibbonProps> = ({
   onSendBackward,
   onAddSlide,
   onOpenImportPptx,
+  onExportPPTX,
   onSave
 }) => {
   const isTextLike = selectedElement && (selectedElement.type === 'text' || selectedElement.type === 'shape');
@@ -87,6 +90,17 @@ export const HomeRibbon: React.FC<HomeRibbonProps> = ({
             >
               <FileUp size={20} className="text-[#c43e1c] group-hover:scale-110 transition" />
               <span className="text-[10px] leading-tight font-bold mt-0.5 text-[#c43e1c]">Nhập PPTX</span>
+            </button>
+          )}
+
+          {onExportPPTX && (
+            <button
+              onClick={onExportPPTX}
+              className="flex flex-col items-center justify-center p-1 rounded hover:bg-orange-50 text-slate-800 transition w-14 h-[50px] group cursor-pointer"
+              title="Xuất bài giảng hiện tại ra file PowerPoint (.pptx) chuẩn Office"
+            >
+              <Download size={20} className="text-[#c43e1c] group-hover:scale-110 transition" />
+              <span className="text-[10px] leading-tight font-bold mt-0.5 text-[#c43e1c]">Xuất PPTX</span>
             </button>
           )}
 

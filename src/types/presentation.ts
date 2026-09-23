@@ -59,6 +59,8 @@ export interface TextElement extends BaseElement {
   borderRadius?: number;
   padding?: number;
   isBulletList?: boolean;
+  imageUrl?: string;
+  imagePosition?: 'top' | 'bottom' | 'background';
 }
 
 export interface ShapeElement extends BaseElement {

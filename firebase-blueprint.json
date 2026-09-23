@@ -75,6 +75,78 @@
         }
       },
       "required": ["activePresentationId", "updatedAt"]
+    },
+    "Member": {
+      "title": "Member",
+      "description": "A user member account issued by the Super Admin",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique member identifier"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Full name of the member"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number used as login username"
+        },
+        "password": {
+          "type": "string",
+          "description": "Member account password"
+        },
+        "role": {
+          "type": "string",
+          "description": "Role type: member"
+        },
+        "permission": {
+          "type": "string",
+          "description": "Permission level: editor or viewer"
+        },
+        "status": {
+          "type": "string",
+          "description": "Account status: active or locked"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "Creator of the member account"
+        }
+      },
+      "required": ["id", "fullName", "phone", "password", "role", "permission", "status", "updatedAt"]
+    },
+    "AdminAuth": {
+      "title": "AdminAuth",
+      "description": "Super admin credential and configuration document",
+      "type": "object",
+      "properties": {
+        "adminPassword": {
+          "type": "string",
+          "description": "Super Admin private login password"
+        },
+        "adminName": {
+          "type": "string",
+          "description": "Display name of the Super Admin"
+        },
+        "adminEmail": {
+          "type": "string",
+          "description": "Optional contact email of the Super Admin"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of password update"
+        }
+      },
+      "required": ["adminPassword", "updatedAt"]
     }
   },
   "firestore": {
@@ -85,6 +157,14 @@
     "/system/{systemDocId}": {
       "schema": "AppState",
       "description": "Global application state synchronization document"
+    },
+    "/members/{memberId}": {
+      "schema": "Member",
+      "description": "Registered member accounts manageable only by the Super Admin"
+    },
+    "/system/admin_auth": {
+      "schema": "AdminAuth",
+      "description": "Super admin security credentials document"
     }
   }
 }

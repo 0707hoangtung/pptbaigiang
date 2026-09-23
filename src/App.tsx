@@ -49,6 +49,11 @@ import {
   CLIENT_ID
 } from './services/presentationCloudService';
 import { CheckCircle, Info, FileUp } from 'lucide-react';
+import { CurrentUser } from './types/auth';
+import { getSavedCurrentUser, saveCurrentUser } from './services/authService';
+import { AuthModal } from './components/AuthModal';
+import { MemberManagementModal } from './components/MemberManagementModal';
+import { exportToPowerPoint } from './utils/exportPptx';
 
 export default function App() {
   // Load presentation from localStorage or default
@@ -238,6 +243,7 @@ export default function App() {
   const [isNotesOpen, setIsNotesOpen] = useState<boolean>(false);
   const [isSaved, setIsSaved] = useState<boolean>(true);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isExportingPPTX, setIsExportingPPTX] = useState<boolean>(false);
 
   // Dialog states
   const [isRepositoryOpen, setIsRepositoryOpen] = useState<boolean>(false);
@@ -253,6 +259,36 @@ export default function App() {
   const [mathModalInitialFormula, setMathModalInitialFormula] = useState<string>('x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}');
   const [isMultimediaOpen, setIsMultimediaOpen] = useState<boolean>(false);
   const [multimediaInitialTab, setMultimediaInitialTab] = useState<'video-file' | 'video-online' | 'audio' | 'link'>('video-online');
+
+  // User Authentication & Roles state
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => getSavedCurrentUser());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'change_admin_pw'>('login');
+  const [isMemberManagementOpen, setIsMemberManagementOpen] = useState<boolean>(false);
+
+  const checkEditPermission = useCallback((): boolean => {
+    if (currentUser?.role === 'member' && currentUser?.permission === 'viewer') {
+      showToast('⚠️ Tài khoản của bạn được cấp quyền "Chỉ xem". Bạn không thể chỉnh sửa hoặc lưu bài giảng này!');
+      return false;
+    }
+    return true;
+  }, [currentUser]);
+
+  const handleOpenAuthModal = () => {
+    setAuthModalMode('login');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleOpenChangeAdminPassword = () => {
+    setAuthModalMode('change_admin_pw');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleLogout = () => {
+    saveCurrentUser(null);
+    setCurrentUser(null);
+    showToast('Đã đăng xuất tài khoản an toàn.');
+  };
 
   // Global Drag-and-drop listener for PowerPoint files (.pptx, .ppt)
   useEffect(() => {
@@ -291,6 +327,7 @@ export default function App() {
 
   // Record history when presentation changes
   const updatePresentationWithHistory = useCallback((updater: (prev: Presentation) => Presentation) => {
+    if (!checkEditPermission()) return;
     isUserModifiedRef.current = true;
     setPresentation((prev) => {
       const next = updater(prev);
@@ -299,7 +336,7 @@ export default function App() {
       setIsSaved(false);
       return next;
     });
-  }, [historyIndex]);
+  }, [historyIndex, checkEditPermission]);
 
   // Real-time debounced auto-save & cloud synchronization engine
   useEffect(() => {
@@ -422,6 +459,55 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeSlideIndex, presentation.slides.length, selectedElementId, historyIndex, history]);
+
+  // Global Paste listener for pasting image into Text Box (Hộp chữ) or slide canvas
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      // If typing in input, ignore
+      if (target && target.tagName === 'INPUT') return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            if (!checkEditPermission()) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const dataUrl = event.target?.result as string;
+              if (!dataUrl) return;
+
+              const currentSlide = presentation.slides[activeSlideIndex];
+              const currentEl = currentSlide?.elements.find(el => el.id === selectedElementId);
+
+              if (currentEl && currentEl.type === 'text') {
+                handleUpdateElement({
+                  imageUrl: dataUrl,
+                  imagePosition: (currentEl as any).imagePosition || 'top',
+                  height: Math.max(currentEl.height, 35)
+                } as any);
+                showToast('📷 Đã dán ảnh vào Hộp chữ thành công!');
+              } else {
+                handleInsertImage(dataUrl);
+                showToast('📷 Đã dán ảnh mới vào trang chiếu!');
+              }
+            };
+            reader.readAsDataURL(file);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [presentation.slides, activeSlideIndex, selectedElementId, checkEditPermission]);
 
   // Slide CRUD Actions
   const handleAddSlide = (layout: string = 'title-content') => {
@@ -1328,6 +1414,21 @@ export default function App() {
     setIsRepositoryOpen(false);
   };
 
+  const handleExportPPTX = async () => {
+    if (isExportingPPTX) return;
+    setIsExportingPPTX(true);
+    showToast('⏳ Đang tạo và đóng gói tệp PowerPoint (.pptx)...');
+    try {
+      await exportToPowerPoint(presentation);
+      showToast(`🎉 Đã xuất thành công bài giảng sang file PowerPoint (.pptx)!`);
+    } catch (err) {
+      console.error('Lỗi khi xuất file PowerPoint:', err);
+      showToast('❌ Có lỗi xảy ra khi tạo tệp PowerPoint. Vui lòng kiểm tra lại!');
+    } finally {
+      setIsExportingPPTX(false);
+    }
+  };
+
   const handleExportJSON = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(presentation, null, 2));
     const downloadAnchor = document.createElement('a');
@@ -1445,10 +1546,17 @@ export default function App() {
         onStartSlideShow={() => setViewMode('slideshow')}
         onOpenRepository={() => setIsRepositoryOpen(true)}
         onOpenImportPptx={() => setIsImportPptxOpen(true)}
+        onExportPPTX={handleExportPPTX}
+        isExportingPPTX={isExportingPPTX}
         onExportJSON={handleExportJSON}
         onPrintSlides={handlePrintSlides}
         onToggleFullscreen={handleToggleFullscreen}
         isFullscreen={isFullscreen}
+        currentUser={currentUser}
+        onOpenAuthModal={handleOpenAuthModal}
+        onOpenMemberManagement={() => setIsMemberManagementOpen(true)}
+        onOpenChangeAdminPassword={handleOpenChangeAdminPassword}
+        onLogout={handleLogout}
       />
 
       {/* 2. Ribbon Menu Tabs and Toolbars */}
@@ -1463,6 +1571,8 @@ export default function App() {
         onBringForward={handleBringForward}
         onSendBackward={handleSendBackward}
         onAddSlide={handleAddSlide}
+        onOpenImportPptx={() => setIsImportPptxOpen(true)}
+        onExportPPTX={handleExportPPTX}
         onSave={handleManualSave}
         // Insert tab (matching user screenshot)
         onOpenTablePicker={() => setIsTablePickerOpen(true)}
@@ -1531,7 +1641,6 @@ export default function App() {
         onPresenterMode={() => setViewMode('slideshow')}
         onTriggerConfetti={() => setViewMode('slideshow')}
         onOpenRepository={() => setIsRepositoryOpen(true)}
-        onOpenImportPptx={() => setIsImportPptxOpen(true)}
       />
 
       {/* 3. Main Body View (Normal Editor or Slide Sorter) */}
@@ -1732,6 +1841,25 @@ export default function App() {
         onInsertVideo={handleInsertVideoElement}
         onInsertAudio={handleInsertAudioElement}
         onInsertLink={handleInsertLinkElement}
+      />
+
+      {/* 8.8. Authentication Modal (Login / Change Admin Password) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        currentUser={currentUser}
+        initialMode={authModalMode}
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          showToast(`Đăng nhập thành công! Chào mừng ${user.fullName} (${user.role === 'super_admin' ? 'Quản trị viên cao nhất' : 'Thành viên'})`);
+        }}
+      />
+
+      {/* 8.9. Member Management Modal (Super Admin Only) */}
+      <MemberManagementModal
+        isOpen={isMemberManagementOpen}
+        onClose={() => setIsMemberManagementOpen(false)}
+        currentUser={currentUser}
       />
 
       {/* 9. Real-time Toast Feedback Notification */}

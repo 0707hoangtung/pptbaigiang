@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Slide, SlideElement } from '../types/presentation';
 import { SlideElementRenderer } from './SlideElementRenderer';
-import { Trash2, Copy, Move, ArrowUp, ArrowDown, Calculator, Sparkles } from 'lucide-react';
+import { Trash2, Copy, Move, ArrowUp, ArrowDown, Calculator, Sparkles, Image as ImageIcon, Layers, X as XIcon } from 'lucide-react';
 
 interface SlideCanvasProps {
   slide: Slide;
@@ -262,14 +262,74 @@ export const SlideCanvas: React.FC<SlideCanvasProps> = ({
                       onMouseDown={(e) => e.stopPropagation()}
                     >
                       {element.type === 'text' && (
-                        <button
-                          onClick={() => onEditFormula && onEditFormula((element as any).text || '')}
-                          className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 rounded text-white flex items-center gap-1 font-bold text-[11px] shadow-xs"
-                          title="Soạn công thức Toán (LaTeX)"
-                        >
-                          <Calculator size={12} />
-                          <span>LaTeX</span>
-                        </button>
+                        <>
+                          <button
+                            onClick={() => onEditFormula && onEditFormula((element as any).text || '')}
+                            className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 rounded text-white flex items-center gap-1 font-bold text-[11px] shadow-xs cursor-pointer"
+                            title="Soạn công thức Toán (LaTeX)"
+                          >
+                            <Calculator size={12} />
+                            <span>LaTeX</span>
+                          </button>
+
+                          {/* Dán / Chèn ảnh vào Hộp chữ */}
+                          <label 
+                            className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 rounded text-white flex items-center gap-1 font-bold text-[11px] shadow-xs cursor-pointer"
+                            title="Chèn ảnh vào Hộp chữ này (Hoặc bấm Ctrl + V khi đang chọn hộp chữ để dán nhanh)"
+                          >
+                            <ImageIcon size={12} />
+                            <span>{(element as any).imageUrl ? 'Đổi ảnh' : 'Dán/Chèn ảnh'}</span>
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              className="hidden" 
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = (re) => {
+                                    if (re.target?.result) {
+                                      onUpdateElement({ 
+                                        imageUrl: re.target.result as string, 
+                                        imagePosition: (element as any).imagePosition || 'top',
+                                        height: Math.max(element.height, 35)
+                                      } as any);
+                                    }
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+
+                          {/* Toggle vị trí ảnh và nút gỡ ảnh */}
+                          {(element as any).imageUrl && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  const currentPos = (element as any).imagePosition || 'top';
+                                  const nextPos = currentPos === 'top' ? 'bottom' : currentPos === 'bottom' ? 'background' : 'top';
+                                  onUpdateElement({ imagePosition: nextPos } as any);
+                                }}
+                                className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-amber-300 flex items-center gap-1 text-[11px] cursor-pointer"
+                                title={`Vị trí ảnh: ${(element as any).imagePosition === 'bottom' ? 'Dưới chữ' : (element as any).imagePosition === 'background' ? 'Làm nền' : 'Trên chữ'}. Bấm để đổi.`}
+                              >
+                                <Layers size={11} />
+                                <span>
+                                  {(element as any).imagePosition === 'bottom' ? 'Dưới' : (element as any).imagePosition === 'background' ? 'Nền' : 'Trên'}
+                                </span>
+                              </button>
+
+                              <button
+                                onClick={() => onUpdateElement({ imageUrl: undefined } as any)}
+                                className="p-1 hover:bg-red-600/80 rounded text-slate-300 hover:text-white cursor-pointer"
+                                title="Gỡ ảnh khỏi hộp chữ này"
+                              >
+                                <XIcon size={12} />
+                              </button>
+                            </>
+                          )}
+                        </>
                       )}
                       <button
                         onClick={(e) => {

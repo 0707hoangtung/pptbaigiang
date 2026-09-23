@@ -35,6 +35,28 @@ service cloud.firestore {
              (!('lastEditorClientId' in data) || (data.lastEditorClientId is string && data.lastEditorClientId.size() <= 128));
     }
 
+    function isValidMember(id, data) {
+      return data.keys().hasAll(['id', 'fullName', 'phone', 'password', 'role', 'permission', 'status', 'updatedAt']) &&
+             data.id is string && data.id == id && data.id.size() <= 128 &&
+             data.fullName is string && data.fullName.size() <= 200 &&
+             data.phone is string && data.phone.size() <= 30 &&
+             data.password is string && data.password.size() <= 500 &&
+             data.role is string && data.role == 'member' &&
+             data.permission is string && (data.permission == 'editor' || data.permission == 'viewer') &&
+             data.status is string && (data.status == 'active' || data.status == 'locked') &&
+             data.updatedAt is string && data.updatedAt.size() <= 128 &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 128)) &&
+             (!('createdBy' in data) || (data.createdBy is string && data.createdBy.size() <= 128));
+    }
+
+    function isValidAdminAuth(data) {
+      return data.keys().hasAll(['adminPassword', 'updatedAt']) &&
+             data.adminPassword is string && data.adminPassword.size() <= 500 &&
+             data.updatedAt is string && data.updatedAt.size() <= 128 &&
+             (!('adminName' in data) || (data.adminName is string && data.adminName.size() <= 200)) &&
+             (!('adminEmail' in data) || (data.adminEmail is string && data.adminEmail.size() <= 200));
+    }
+
     match /presentations/{presentationId} {
       allow read: if true;
       allow create, update: if isValidId(presentationId) && isValidPresentation(presentationId, request.resource.data);
@@ -43,8 +65,15 @@ service cloud.firestore {
 
     match /system/{systemDocId} {
       allow read: if true;
-      allow create, update: if isValidId(systemDocId) && isValidAppState(request.resource.data);
+      allow create, update: if isValidId(systemDocId) && 
+        (systemDocId == 'admin_auth' ? isValidAdminAuth(request.resource.data) : isValidAppState(request.resource.data));
       allow delete: if false;
+    }
+
+    match /members/{memberId} {
+      allow read: if true;
+      allow create, update: if isValidId(memberId) && isValidMember(memberId, request.resource.data);
+      allow delete: if isValidId(memberId);
     }
   }
 }

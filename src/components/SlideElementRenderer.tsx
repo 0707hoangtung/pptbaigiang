@@ -51,31 +51,53 @@ export const SlideElementRenderer: React.FC<SlideElementRendererProps> = ({
   // 1. TEXT ELEMENT
   if (element.type === 'text') {
     const textEl = element as TextElement;
+    const hasImage = Boolean(textEl.imageUrl);
+    const imgPos = textEl.imagePosition || 'top';
 
     if (isEditingInline && !isPresenterMode) {
       return (
-        <textarea
-          value={textEl.text}
-          onChange={(e) => onUpdateText && onUpdateText(e.target.value)}
-          onBlur={() => setIsEditingInline(false)}
-          autoFocus
-          className="w-full h-full p-2 resize-none bg-black/20 text-white rounded border border-blue-400 focus:outline-hidden"
-          style={{
-            fontSize: `${textEl.fontSize}px`,
-            fontFamily: textEl.fontFamily || 'Segoe UI',
-            fontWeight: textEl.fontWeight || 'normal',
-            fontStyle: textEl.fontStyle || 'normal',
-            textAlign: textEl.textAlign || 'left',
-            color: textEl.color || '#ffffff'
-          }}
-        />
+        <div className="w-full h-full flex flex-col p-1.5 bg-black/30 rounded border border-blue-400 overflow-hidden">
+          {hasImage && imgPos === 'top' && (
+            <div className="h-2/5 w-full flex items-center justify-center p-1 bg-black/10 shrink-0 overflow-hidden mb-1">
+              <img 
+                src={textEl.imageUrl} 
+                alt="Ảnh trong hộp chữ" 
+                className="max-h-full max-w-full object-contain rounded" 
+              />
+            </div>
+          )}
+          <textarea
+            value={textEl.text}
+            onChange={(e) => onUpdateText && onUpdateText(e.target.value)}
+            onBlur={() => setIsEditingInline(false)}
+            autoFocus
+            className="w-full flex-1 p-1 resize-none bg-transparent text-white focus:outline-hidden"
+            style={{
+              fontSize: `${textEl.fontSize}px`,
+              fontFamily: textEl.fontFamily || 'Segoe UI',
+              fontWeight: textEl.fontWeight || 'normal',
+              fontStyle: textEl.fontStyle || 'normal',
+              textAlign: textEl.textAlign || 'left',
+              color: textEl.color || '#ffffff'
+            }}
+          />
+          {hasImage && imgPos === 'bottom' && (
+            <div className="h-2/5 w-full flex items-center justify-center p-1 bg-black/10 shrink-0 overflow-hidden mt-1">
+              <img 
+                src={textEl.imageUrl} 
+                alt="Ảnh trong hộp chữ" 
+                className="max-h-full max-w-full object-contain rounded" 
+              />
+            </div>
+          )}
+        </div>
       );
     }
 
     return (
       <div
         onDoubleClick={() => !isPresenterMode && setIsEditingInline(true)}
-        className="w-full h-full flex flex-col justify-center select-none overflow-hidden"
+        className="w-full h-full flex flex-col select-none overflow-hidden"
         style={{
           fontSize: `${textEl.fontSize}px`,
           fontFamily: textEl.fontFamily || 'Segoe UI',
@@ -86,11 +108,29 @@ export const SlideElementRenderer: React.FC<SlideElementRendererProps> = ({
           backgroundColor: textEl.backgroundColor,
           borderRadius: textEl.borderRadius ? `${textEl.borderRadius}px` : undefined,
           padding: textEl.padding ? `${textEl.padding}px` : '4px',
-          lineHeight: '1.4'
+          lineHeight: '1.4',
+          ...(hasImage && imgPos === 'background' ? {
+            backgroundImage: `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url(${textEl.imageUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          } : {})
         }}
       >
+        {/* Render image above text if top */}
+        {hasImage && imgPos === 'top' && (
+          <div className="w-full flex-1 min-h-0 flex items-center justify-center overflow-hidden mb-1">
+            <img 
+              src={textEl.imageUrl} 
+              alt="Ảnh trong hộp chữ" 
+              className="max-h-full max-w-full object-contain rounded pointer-events-none" 
+            />
+          </div>
+        )}
+
+        {/* Text Content */}
         <div
-          className="w-full block"
+          className={`w-full block ${hasImage && imgPos !== 'background' ? 'shrink-0' : 'my-auto'}`}
           style={{
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
@@ -99,6 +139,17 @@ export const SlideElementRenderer: React.FC<SlideElementRendererProps> = ({
         >
           {renderMixedMathContent(textEl.text)}
         </div>
+
+        {/* Render image below text if bottom */}
+        {hasImage && imgPos === 'bottom' && (
+          <div className="w-full flex-1 min-h-0 flex items-center justify-center overflow-hidden mt-1">
+            <img 
+              src={textEl.imageUrl} 
+              alt="Ảnh trong hộp chữ" 
+              className="max-h-full max-w-full object-contain rounded pointer-events-none" 
+            />
+          </div>
+        )}
       </div>
     );
   }
