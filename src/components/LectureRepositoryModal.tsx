@@ -20,9 +20,14 @@ import {
   RotateCcw,
   FileUp,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Shield,
+  Lock,
+  Crown
 } from 'lucide-react';
 import { Presentation } from '../types/presentation';
+import { CurrentUser } from '../types/auth';
+import { canDeletePresentation } from '../services/presentationCloudService';
 import { LECTURE_LIBRARY } from '../data/defaultLectures';
 import { EditLectureModal } from './EditLectureModal';
 
@@ -30,6 +35,7 @@ interface LectureRepositoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentPresentation: Presentation;
+  currentUser?: CurrentUser | null;
   onLoadPresentation: (presentation: Presentation) => void;
   onSaveCurrentToLibrary: () => void;
   onSaveCurrentAsNewCopy?: () => void;
@@ -48,6 +54,7 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
   isOpen,
   onClose,
   currentPresentation,
+  currentUser,
   onLoadPresentation,
   onSaveCurrentToLibrary,
   onSaveCurrentAsNewCopy,
@@ -139,6 +146,13 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
 
   const confirmDelete = async () => {
     if (deletingPresentation && !isDeleting) {
+      const check = canDeletePresentation(deletingPresentation, currentUser);
+      if (!check.allowed) {
+        setSaveNoticeMessage(`⛔ ${check.reason}`);
+        setDeletingPresentation(null);
+        return;
+      }
+
       try {
         setIsDeleting(true);
         await onDeleteSavedPresentation(deletingPresentation.id);
@@ -162,12 +176,30 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
               <h2 className="text-lg font-black tracking-wide flex items-center gap-2">
                 KHO BÀI GIẢNG ĐIỆN TỬ
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/20 font-medium">
-                  Thời Gian Thực & Quản Lý Toàn Quyền
+                  Đồng Bộ Đám Mây & Bảo Vệ Dữ Liệu
                 </span>
               </h2>
-              <p className="text-xs text-white/85">
-                Xem, chỉnh sửa thông tin, tạo bản sao và xóa bài giảng trực tiếp trong kho lưu trữ
-              </p>
+              {/* User Role & Permission Safety Badge */}
+              <div className="flex items-center gap-2 mt-1">
+                {currentUser?.role === 'super_admin' ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-900 text-[11px] font-bold shadow-xs">
+                    <Crown size={12} />
+                    <span>Quản trị viên tối cao: Toàn quyền quản trị & xóa bài giảng</span>
+                  </span>
+                ) : currentUser?.role === 'member' ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/25 text-white text-[11px] font-medium border border-white/20">
+                    <Shield size={12} className="text-emerald-300" />
+                    <span>Thành viên: <strong>{currentUser.fullName}</strong></span>
+                    <span className="text-white/50">|</span>
+                    <span className="text-emerald-200 text-[10.5px]">🛡️ An toàn dữ liệu: Chỉ được xóa bài giảng do chính bạn đưa lên</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[11px]">
+                    <Lock size={12} />
+                    <span>Chế độ khách: Đăng nhập để lưu và quản lý bài giảng</span>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -352,6 +384,17 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
                 const firstSlide = presentation.slides[0];
                 const slideBg = firstSlide?.backgroundColor || '#1e5385';
 
+                // Permission & Ownership calculation
+                const isSuperAdmin = currentUser?.role === 'super_admin';
+                const deletePerm = canDeletePresentation(presentation, currentUser);
+                const isMyLecture = Boolean(
+                  (currentUser?.role === 'member' && deletePerm.allowed) ||
+                  (isSuperAdmin && (presentation.createdBy === 'super_admin' || presentation.creatorRole === 'super_admin'))
+                );
+
+                const creatorDisplay = presentation.creatorName || presentation.author || 'Thành viên';
+                const creatorPhoneDisplay = presentation.creatorPhone ? ` (${presentation.creatorPhone})` : '';
+
                 return (
                   <div
                     key={presentation.id}
@@ -378,30 +421,47 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
                               <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold animate-pulse shadow-xs">
                                 ✓ Vừa lưu vào Kho
                               </span>
-                            ) : isUserSaved ? (
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-[10px] font-bold shadow-xs">
-                                Bài của tôi
+                            ) : isMyLecture ? (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold shadow-xs flex items-center gap-1">
+                                ✓ Bài của tôi
+                              </span>
+                            ) : isSuperAdmin ? (
+                              <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[10px] font-bold shadow-xs flex items-center gap-1">
+                                <Crown size={10} /> Quản trị
+                              </span>
+                            ) : presentation.createdBy === 'system' || presentation.creatorRole === 'system' ? (
+                              <span className="px-2 py-0.5 rounded-full bg-blue-600/80 text-white text-[10px] font-bold shadow-xs flex items-center gap-1">
+                                <Shield size={10} /> Mẫu chuẩn
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-full bg-blue-600/80 text-[10px] font-bold shadow-xs">
-                                Mẫu chuẩn
+                              <span className="px-2 py-0.5 rounded-full bg-slate-800/80 text-white text-[10px] font-bold shadow-xs flex items-center gap-1" title={`Người tạo: ${creatorDisplay}${creatorPhoneDisplay}`}>
+                                <Shield size={10} className="text-amber-300" /> {creatorDisplay}
                               </span>
                             )}
                             <span className="px-2 py-0.5 rounded-full bg-black/40 text-[10px] font-bold backdrop-blur-xs">
                               {presentation.slides.length} trang
                             </span>
-                            {/* Nút xóa nhanh góc trên card */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeletingPresentation(presentation);
-                              }}
-                              className="w-5 h-5 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-xs transition ml-1 cursor-pointer"
-                              title="Xóa bài giảng này"
-                            >
-                              <Trash2 size={11} />
-                            </button>
+                            {/* Nút xóa nhanh góc trên card - Chỉ hiển thị nếu có quyền */}
+                            {deletePerm.allowed ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingPresentation(presentation);
+                                }}
+                                className="w-5 h-5 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-xs transition ml-1 cursor-pointer"
+                                title={isSuperAdmin ? "Xóa bài giảng này (Toàn quyền Quản trị viên)" : "Xóa bài giảng của tôi"}
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            ) : (
+                              <div 
+                                className="w-5 h-5 rounded-full bg-black/40 text-slate-300 flex items-center justify-center ml-1 cursor-not-allowed"
+                                title={deletePerm.reason || "An toàn dữ liệu: Bạn không có quyền xóa bài giảng của người khác"}
+                              >
+                                <Lock size={10} />
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -412,7 +472,7 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
                         </div>
 
                         <div className="flex items-center justify-between text-[10px] opacity-85 z-10">
-                          <span>{presentation.author}</span>
+                          <span className="truncate max-w-[140px]">{creatorDisplay}</span>
                           <span>{presentation.updatedAt}</span>
                         </div>
                       </div>
@@ -430,9 +490,9 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
                             <GraduationCap size={13} className="text-amber-600" />
                             <span>{presentation.grade || 'Trung học'}</span>
                           </span>
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1" title={`Tác giả / Người tạo: ${creatorDisplay}${creatorPhoneDisplay}`}>
                             <User size={13} className="text-blue-600" />
-                            <span className="truncate max-w-[120px]">{presentation.author}</span>
+                            <span className="truncate max-w-[130px] font-medium">{creatorDisplay}</span>
                           </span>
                         </div>
                       </div>
@@ -487,7 +547,7 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
                           <button
                             onClick={() => onDuplicatePresentation(presentation)}
                             className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 bg-white border border-slate-200 rounded-lg transition"
-                            title="Nhân bản bài giảng này thành bản sao mới"
+                            title="Nhân bản bài giảng này thành bản sao mới của bạn"
                           >
                             <Copy size={15} />
                           </button>
@@ -501,15 +561,26 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
                             <Download size={15} />
                           </button>
 
-                          {/* Xóa bài giảng - Luôn hiển thị rõ ràng cho TẤT CẢ các bài giảng */}
-                          <button
-                            onClick={() => setDeletingPresentation(presentation)}
-                            className="px-2 py-1 text-red-600 hover:text-red-700 hover:bg-red-100 bg-red-50 border border-red-200 rounded-lg transition flex items-center gap-1 font-bold text-xs shadow-2xs cursor-pointer"
-                            title="Xóa bài giảng này khỏi Kho bài giảng"
-                          >
-                            <Trash2 size={14} className="text-red-600 shrink-0" />
-                            <span className="text-[11px] text-red-700 font-bold">Xóa</span>
-                          </button>
+                          {/* Xóa bài giảng: Phân quyền an toàn tuyệt đối */}
+                          {deletePerm.allowed ? (
+                            <button
+                              onClick={() => setDeletingPresentation(presentation)}
+                              className="px-2 py-1 text-red-600 hover:text-red-700 hover:bg-red-100 bg-red-50 border border-red-200 rounded-lg transition flex items-center gap-1 font-bold text-xs shadow-2xs cursor-pointer"
+                              title={isSuperAdmin ? "Xóa bài giảng này (Quyền Quản trị viên tối cao)" : "Xóa bài giảng do bạn tạo"}
+                            >
+                              <Trash2 size={14} className="text-red-600 shrink-0" />
+                              <span className="text-[11px] text-red-700 font-bold">Xóa</span>
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              className="px-2 py-1 text-slate-400 bg-slate-100 border border-slate-200 rounded-lg flex items-center gap-1 font-medium text-xs cursor-not-allowed opacity-75"
+                              title={deletePerm.reason || 'Bảo vệ an toàn dữ liệu: Bạn không có quyền xóa bài giảng của người khác'}
+                            >
+                              <Lock size={12} className="text-slate-400 shrink-0" />
+                              <span className="text-[10px] text-slate-500 font-bold">Được bảo vệ</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -527,6 +598,7 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
           isOpen={true}
           onClose={() => setEditingPresentation(null)}
           presentation={editingPresentation}
+          currentUser={currentUser}
           onSave={(updated) => {
             onUpdatePresentationInLibrary(updated);
             setEditingPresentation(null);

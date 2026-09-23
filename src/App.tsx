@@ -39,6 +39,7 @@ import {
   savePresentationToCloud,
   setActivePresentationIdInCloud,
   deletePresentationFromCloud,
+  canDeletePresentation,
   subscribeToCloudLibrary,
   subscribeToSinglePresentation,
   subscribeToCloudActiveState,
@@ -1246,6 +1247,23 @@ export default function App() {
         updatedAt: new Date().toISOString()
       };
 
+      // Set or inherit creator credentials
+      if (currentUser?.role === 'super_admin') {
+        if (!lectureToSave.createdBy || asNewCopy) {
+          lectureToSave.createdBy = 'super_admin';
+          lectureToSave.creatorRole = 'super_admin';
+          lectureToSave.creatorName = currentUser.fullName || 'Quản trị viên';
+        }
+      } else if (currentUser?.role === 'member') {
+        if (!lectureToSave.createdBy || asNewCopy) {
+          lectureToSave.createdBy = currentUser.memberId || currentUser.phone || 'member';
+          lectureToSave.creatorPhone = currentUser.phone;
+          lectureToSave.creatorName = currentUser.fullName;
+          lectureToSave.creatorRole = 'member';
+          lectureToSave.author = currentUser.fullName;
+        }
+      }
+
       if (asNewCopy) {
         lectureToSave = {
           ...lectureToSave,
@@ -1268,7 +1286,7 @@ export default function App() {
       currentPresentationIdRef.current = lectureToSave.id;
       isUserModifiedRef.current = false;
       localStorage.setItem('kho_bai_giang_active', JSON.stringify(lectureToSave));
-      savePresentationToCloud(lectureToSave).catch((err) => {
+      savePresentationToCloud(lectureToSave, currentUser).catch((err) => {
         console.warn('Saved to persistent cache (pending cloud upload):', err);
       });
       setActivePresentationIdInCloud(lectureToSave.id).catch(console.warn);
@@ -1300,7 +1318,7 @@ export default function App() {
     broadcastLibrarySync(updatedLib);
 
     // 2. Persist to Cloud Firestore
-    savePresentationToCloud(updated).catch(console.warn);
+    savePresentationToCloud(updated, currentUser).catch(console.warn);
 
     // 3. If currently editing this presentation, update active presentation as well!
     if (presentation.id === updated.id) {
@@ -1312,28 +1330,60 @@ export default function App() {
   };
 
   const handleDuplicatePresentation = (target: Presentation) => {
+    let creatorProps: Partial<Presentation> = {};
+    if (currentUser?.role === 'super_admin') {
+      creatorProps = {
+        createdBy: 'super_admin',
+        creatorRole: 'super_admin',
+        creatorName: currentUser.fullName || 'Quản trị viên'
+      };
+    } else if (currentUser?.role === 'member') {
+      creatorProps = {
+        createdBy: currentUser.memberId || currentUser.phone || 'member',
+        creatorPhone: currentUser.phone,
+        creatorName: currentUser.fullName,
+        creatorRole: 'member',
+        author: currentUser.fullName
+      };
+    }
+
     const cloned: Presentation = {
       ...target,
       id: `lec-user-${Date.now()}`,
       title: `${target.title} (Bản sao)`,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      ...creatorProps
     };
     const updatedLib = [cloned, ...savedLibrary];
     setSavedLibrary(updatedLib);
     localStorage.setItem('kho_bai_giang_user_saved', JSON.stringify(updatedLib));
     broadcastLibrarySync(updatedLib);
-    savePresentationToCloud(cloned).catch(console.warn);
+    savePresentationToCloud(cloned, currentUser).catch(console.warn);
     showToast(`Đã nhân bản bài giảng "${cloned.title}" vào Kho bài giảng đám mây!`);
   };
 
   const handleDeleteSavedPresentation = async (id: string) => {
     const target = savedLibrary.find(s => s.id === id);
+    if (!target) return;
+
+    // Check data security authorization: Super Admin can delete anything; Members can only delete their own
+    const check = canDeletePresentation(target, currentUser);
+    if (!check.allowed) {
+      showToast(`⛔ ${check.reason || 'Bạn không có quyền xóa bài giảng của người khác!'}`);
+      return;
+    }
 
     // 1. Delete permanently from Cloud Firestore (never resurrects on any device/tab)
     try {
-      await deletePresentationFromCloud(id);
-    } catch (err) {
+      const res = await deletePresentationFromCloud(id, currentUser);
+      if (!res.success) {
+        showToast(`❌ ${res.message || 'Lỗi khi xóa bài giảng khỏi đám mây'}`);
+        return;
+      }
+    } catch (err: any) {
       console.error('Error deleting presentation from cloud:', err);
+      showToast(`❌ ${err?.message || 'Lỗi khi xóa bài giảng'}`);
+      return;
     }
 
     // 2. Remove from local savedLibrary
@@ -1353,10 +1403,14 @@ export default function App() {
       localStorage.setItem('kho_bai_giang_active', JSON.stringify(fallback));
     }
 
-    showToast(`Đã xóa vĩnh viễn bài giảng "${target?.title || ''}" khỏi hệ thống đám mây.`);
+    showToast(`Đã xóa bài giảng "${target?.title || ''}" khỏi hệ thống thành công.`);
   };
 
   const handleRestoreDefaultSamples = async () => {
+    if (currentUser?.role !== 'super_admin') {
+      showToast('⛔ Chỉ Quản trị viên mới có quyền khôi phục bài giảng mẫu hệ thống.');
+      return;
+    }
     try {
       await restoreDefaultLecturesToCloud();
       showToast('Đã khôi phục các bài mẫu GDPT vào Kho bài giảng đám mây!');
@@ -1367,15 +1421,32 @@ export default function App() {
   };
 
   const handleNewPresentation = () => {
+    let creatorProps: Partial<Presentation> = {};
+    if (currentUser?.role === 'super_admin') {
+      creatorProps = {
+        createdBy: 'super_admin',
+        creatorRole: 'super_admin',
+        creatorName: currentUser.fullName || 'Quản trị viên'
+      };
+    } else if (currentUser?.role === 'member') {
+      creatorProps = {
+        createdBy: currentUser.memberId || currentUser.phone || 'member',
+        creatorPhone: currentUser.phone,
+        creatorName: currentUser.fullName,
+        creatorRole: 'member'
+      };
+    }
+
     const blankPresentation: Presentation = {
       id: `lec-user-${Date.now()}`,
       title: 'Bài Giảng Mới Chưa Đặt Tên',
       subject: 'Môn học',
       grade: 'Khối lớp',
-      author: 'Giáo viên',
+      author: currentUser?.fullName || 'Giáo viên',
       updatedAt: new Date().toISOString(),
       aspectRatio: '16:9',
       themeId: 'ocean-blue',
+      ...creatorProps,
       slides: [
         {
           id: `slide-${Date.now()}`,
@@ -1447,18 +1518,40 @@ export default function App() {
         try {
           const imported = JSON.parse(event.target?.result as string);
           if (imported.slides && Array.isArray(imported.slides)) {
-            setPresentation(imported);
-            currentPresentationIdRef.current = imported.id;
+            let creatorProps: Partial<Presentation> = {};
+            if (currentUser?.role === 'super_admin') {
+              creatorProps = {
+                createdBy: 'super_admin',
+                creatorRole: 'super_admin',
+                creatorName: currentUser.fullName || 'Quản trị viên'
+              };
+            } else if (currentUser?.role === 'member') {
+              creatorProps = {
+                createdBy: currentUser.memberId || currentUser.phone || 'member',
+                creatorPhone: currentUser.phone,
+                creatorName: currentUser.fullName,
+                creatorRole: 'member',
+                author: currentUser.fullName
+              };
+            }
+
+            const presentationWithOwnership: Presentation = {
+              ...imported,
+              ...creatorProps
+            };
+
+            setPresentation(presentationWithOwnership);
+            currentPresentationIdRef.current = presentationWithOwnership.id;
             isUserModifiedRef.current = false;
             setActiveSlideIndex(0);
             setSelectedElementId(null);
-            savePresentationToCloud(imported).catch(console.warn);
-            setActivePresentationIdInCloud(imported.id).catch(console.warn);
+            savePresentationToCloud(presentationWithOwnership, currentUser).catch(console.warn);
+            setActivePresentationIdInCloud(presentationWithOwnership.id).catch(console.warn);
             setIsRepositoryOpen(false);
-            alert(`Đã tải bài giảng "${imported.title}" thành công!`);
+            showToast(`Đã tải bài giảng "${presentationWithOwnership.title}" thành công!`);
           }
         } catch (err) {
-          alert('Tệp không đúng định dạng bài giảng.');
+          showToast('Tệp không đúng định dạng bài giảng.');
         }
       };
       reader.readAsText(file);
@@ -1481,45 +1574,111 @@ export default function App() {
 
   // PowerPoint Import Handlers
   const handleOpenPptxForEdit = (importedPresentation: Presentation) => {
-    setPresentation(importedPresentation);
-    currentPresentationIdRef.current = importedPresentation.id;
+    let creatorProps: Partial<Presentation> = {};
+    if (currentUser?.role === 'super_admin') {
+      creatorProps = {
+        createdBy: 'super_admin',
+        creatorRole: 'super_admin',
+        creatorName: currentUser.fullName || 'Quản trị viên'
+      };
+    } else if (currentUser?.role === 'member') {
+      creatorProps = {
+        createdBy: currentUser.memberId || currentUser.phone || 'member',
+        creatorPhone: currentUser.phone,
+        creatorName: currentUser.fullName,
+        creatorRole: 'member',
+        author: currentUser.fullName
+      };
+    }
+
+    const pptxDoc: Presentation = {
+      ...importedPresentation,
+      ...creatorProps
+    };
+
+    setPresentation(pptxDoc);
+    currentPresentationIdRef.current = pptxDoc.id;
     isUserModifiedRef.current = false;
     setActiveSlideIndex(0);
     setSelectedElementId(null);
     setViewMode('normal');
     setIsImportPptxOpen(false);
     setPptxInitialFile(null);
-    savePresentationToCloud(importedPresentation).catch(console.warn);
-    setActivePresentationIdInCloud(importedPresentation.id).catch(console.warn);
-    showToast(`Đã mở bài giảng PowerPoint "${importedPresentation.title}" (${importedPresentation.slides.length} trang) để chỉnh sửa!`);
+    savePresentationToCloud(pptxDoc, currentUser).catch(console.warn);
+    setActivePresentationIdInCloud(pptxDoc.id).catch(console.warn);
+    showToast(`Đã mở bài giảng PowerPoint "${pptxDoc.title}" (${pptxDoc.slides.length} trang) để chỉnh sửa!`);
   };
 
   const handleOpenPptxForSlideShow = (importedPresentation: Presentation) => {
-    setPresentation(importedPresentation);
-    currentPresentationIdRef.current = importedPresentation.id;
+    let creatorProps: Partial<Presentation> = {};
+    if (currentUser?.role === 'super_admin') {
+      creatorProps = {
+        createdBy: 'super_admin',
+        creatorRole: 'super_admin',
+        creatorName: currentUser.fullName || 'Quản trị viên'
+      };
+    } else if (currentUser?.role === 'member') {
+      creatorProps = {
+        createdBy: currentUser.memberId || currentUser.phone || 'member',
+        creatorPhone: currentUser.phone,
+        creatorName: currentUser.fullName,
+        creatorRole: 'member',
+        author: currentUser.fullName
+      };
+    }
+
+    const pptxDoc: Presentation = {
+      ...importedPresentation,
+      ...creatorProps
+    };
+
+    setPresentation(pptxDoc);
+    currentPresentationIdRef.current = pptxDoc.id;
     isUserModifiedRef.current = false;
     setActiveSlideIndex(0);
     setSelectedElementId(null);
     setViewMode('slideshow');
     setIsImportPptxOpen(false);
     setPptxInitialFile(null);
-    savePresentationToCloud(importedPresentation).catch(console.warn);
-    setActivePresentationIdInCloud(importedPresentation.id).catch(console.warn);
-    showToast(`Đang trình chiếu bài giảng PowerPoint "${importedPresentation.title}"!`);
+    savePresentationToCloud(pptxDoc, currentUser).catch(console.warn);
+    setActivePresentationIdInCloud(pptxDoc.id).catch(console.warn);
+    showToast(`Đang trình chiếu bài giảng PowerPoint "${pptxDoc.title}"!`);
   };
 
   const handleSavePptxToLibrary = (importedPresentation: Presentation) => {
+    let creatorProps: Partial<Presentation> = {};
+    if (currentUser?.role === 'super_admin') {
+      creatorProps = {
+        createdBy: 'super_admin',
+        creatorRole: 'super_admin',
+        creatorName: currentUser.fullName || 'Quản trị viên'
+      };
+    } else if (currentUser?.role === 'member') {
+      creatorProps = {
+        createdBy: currentUser.memberId || currentUser.phone || 'member',
+        creatorPhone: currentUser.phone,
+        creatorName: currentUser.fullName,
+        creatorRole: 'member',
+        author: currentUser.fullName
+      };
+    }
+
+    const pptxDoc: Presentation = {
+      ...importedPresentation,
+      ...creatorProps
+    };
+
     setSavedLibrary((prev) => {
-      const filtered = prev.filter(p => p.id !== importedPresentation.id);
-      const updated = [importedPresentation, ...filtered];
+      const filtered = prev.filter(p => p.id !== pptxDoc.id);
+      const updated = [pptxDoc, ...filtered];
       localStorage.setItem('kho_bai_giang_user_saved', JSON.stringify(updated));
       broadcastLibrarySync(updated);
       return updated;
     });
-    savePresentationToCloud(importedPresentation).catch(console.warn);
+    savePresentationToCloud(pptxDoc, currentUser).catch(console.warn);
     setIsImportPptxOpen(false);
     setPptxInitialFile(null);
-    showToast(`Đã lưu bài giảng "${importedPresentation.title}" vào Kho bài giảng cá nhân và đồng bộ đám mây!`);
+    showToast(`Đã lưu bài giảng "${pptxDoc.title}" vào Kho bài giảng và đồng bộ đám mây!`);
   };
 
   return (
@@ -1743,6 +1902,7 @@ export default function App() {
         isOpen={isRepositoryOpen}
         onClose={() => setIsRepositoryOpen(false)}
         currentPresentation={presentation}
+        currentUser={currentUser}
         onLoadPresentation={(p) => {
           setPresentation(p);
           currentPresentationIdRef.current = p.id;

@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, BookOpen, GraduationCap, User, Palette, Ratio, Sparkles, Trash2 } from 'lucide-react';
+import { X, Save, BookOpen, GraduationCap, User, Palette, Ratio, Sparkles, Trash2, Lock, Shield } from 'lucide-react';
 import { Presentation } from '../types/presentation';
+import { CurrentUser } from '../types/auth';
 import { PRESENTATION_THEMES } from '../data/defaultLectures';
+import { canDeletePresentation } from '../services/presentationCloudService';
 
 interface EditLectureModalProps {
   isOpen: boolean;
   onClose: () => void;
   presentation: Presentation | null;
+  currentUser?: CurrentUser | null;
   onSave: (updated: Presentation) => void;
   onDelete?: (presentation: Presentation) => void;
 }
@@ -39,6 +42,7 @@ export const EditLectureModal: React.FC<EditLectureModalProps> = ({
   isOpen,
   onClose,
   presentation,
+  currentUser,
   onSave,
   onDelete
 }) => {
@@ -255,20 +259,34 @@ export const EditLectureModal: React.FC<EditLectureModalProps> = ({
 
           {/* Footer buttons */}
           <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
-            {onDelete && presentation ? (
-              <button
-                type="button"
-                onClick={() => {
-                  onDelete(presentation);
-                  onClose();
-                }}
-                className="px-3.5 py-2 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 text-xs font-bold transition flex items-center gap-1.5"
-                title="Xóa bài giảng này"
-              >
-                <Trash2 size={14} />
-                <span>Xóa bài giảng</span>
-              </button>
-            ) : <div />}
+            {onDelete && presentation ? (() => {
+              const deletePerm = canDeletePresentation(presentation, currentUser);
+              if (deletePerm.allowed) {
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onDelete(presentation);
+                      onClose();
+                    }}
+                    className="px-3.5 py-2 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    title={currentUser?.role === 'super_admin' ? "Xóa bài giảng này (Toàn quyền Quản trị viên)" : "Xóa bài giảng do bạn đưa lên"}
+                  >
+                    <Trash2 size={14} />
+                    <span>Xóa bài giảng</span>
+                  </button>
+                );
+              }
+              return (
+                <div 
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-100 text-slate-400 text-xs font-medium flex items-center gap-1.5 cursor-not-allowed"
+                  title={deletePerm.reason || "An toàn dữ liệu: Bạn không có quyền xóa bài giảng của người khác"}
+                >
+                  <Lock size={13} className="text-slate-400" />
+                  <span>Dữ liệu được bảo vệ</span>
+                </div>
+              );
+            })() : <div />}
 
             <div className="flex items-center gap-2">
               <button

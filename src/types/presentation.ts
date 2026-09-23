@@ -198,6 +198,10 @@ export interface Presentation {
   aspectRatio: '16:9' | '4:3';
   themeId: string;
   slides: Slide[];
+  createdBy?: string;
+  creatorPhone?: string;
+  creatorName?: string;
+  creatorRole?: 'super_admin' | 'member' | 'system';
 }
 
 export type ActiveTab = 

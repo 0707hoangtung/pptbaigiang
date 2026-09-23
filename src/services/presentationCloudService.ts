@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { Presentation } from '../types/presentation';
+import { CurrentUser } from '../types/auth';
 import { DEFAULT_PRESENTATION, LECTURE_LIBRARY } from '../data/defaultLectures';
 
 export const CLIENT_ID = `client_${Math.random().toString(36).substring(2, 9)}`;
@@ -27,25 +28,136 @@ export interface CloudPresentationDoc {
   updatedAt: string;
   createdAt: string;
   lastEditorClientId?: string;
+  createdBy?: string;
+  creatorPhone?: string;
+  creatorName?: string;
+  creatorRole?: 'super_admin' | 'member' | 'system';
+}
+
+/**
+ * Checks whether the current user is allowed to delete a presentation.
+ * Security & Data Safety Rule:
+ * 1. Super Admin ('super_admin') has ALL permissions to delete any presentation or data in the system.
+ * 2. Members ('member') CANNOT delete any presentation or data belonging to others (other members or system/admin);
+ *    they can ONLY delete their own lectures uploaded/created by themselves.
+ * 3. Guest / Viewer accounts cannot delete any presentation.
+ */
+export function canDeletePresentation(
+  presentation: Presentation,
+  currentUser?: CurrentUser | null
+): { allowed: boolean; reason?: string } {
+  // 1. Quản trị viên cao nhất (super_admin): Toàn quyền xóa mọi dữ liệu
+  if (currentUser?.role === 'super_admin') {
+    return { allowed: true };
+  }
+
+  // 2. Chưa đăng nhập
+  if (!currentUser) {
+    return {
+      allowed: false,
+      reason: 'Vui lòng đăng nhập tài khoản để thực hiện thao tác xóa bài giảng.'
+    };
+  }
+
+  // 3. Tài khoản thành viên chỉ xem (viewer)
+  if (currentUser.role === 'member' && currentUser.permission === 'viewer') {
+    return {
+      allowed: false,
+      reason: 'Tài khoản của bạn được cấp quyền "Chỉ xem". Bạn không thể xóa bài giảng trên hệ thống!'
+    };
+  }
+
+  // 4. Thành viên (member): Chỉ được xóa bài do chính mình tạo
+  if (currentUser.role === 'member') {
+    // Không thể xóa bài giảng mẫu của hệ thống hoặc của Quản trị viên
+    const isSystemOrAdmin = 
+      presentation.createdBy === 'system' || 
+      presentation.createdBy === 'super_admin' || 
+      presentation.creatorRole === 'super_admin' || 
+      presentation.creatorRole === 'system';
+
+    if (isSystemOrAdmin) {
+      return {
+        allowed: false,
+        reason: 'Bảo vệ an toàn dữ liệu: Bạn không có quyền xóa bài giảng của Quản trị viên hoặc bài mẫu của hệ thống!'
+      };
+    }
+
+    // Kiểm tra tính sở hữu của thành viên
+    const isOwnerById = Boolean(presentation.createdBy && currentUser.memberId && presentation.createdBy === currentUser.memberId);
+    const isOwnerByPhone = Boolean(presentation.creatorPhone && currentUser.phone && presentation.creatorPhone === currentUser.phone);
+    const isOwnerByName = Boolean(
+      currentUser.fullName && 
+      ((presentation.creatorName && presentation.creatorName.trim().toLowerCase() === currentUser.fullName.trim().toLowerCase()) ||
+       (presentation.author && presentation.author.trim().toLowerCase() === currentUser.fullName.trim().toLowerCase()))
+    );
+
+    if (isOwnerById || isOwnerByPhone || isOwnerByName) {
+      return { allowed: true };
+    }
+
+    const ownerDesc = presentation.creatorName || presentation.author || 'thành viên khác';
+    return {
+      allowed: false,
+      reason: `Bảo vệ an toàn dữ liệu hệ thống: Bạn không có quyền xóa bài giảng của người khác (${ownerDesc}). Bạn chỉ được phép xóa bài giảng do chính mình đưa lên!`
+    };
+  }
+
+  return {
+    allowed: false,
+    reason: 'Bạn không có quyền thực hiện thao tác xóa này.'
+  };
 }
 
 /**
  * Converts a Presentation object to a cloud-safe Firestore document
  */
-export function presentationToCloudDoc(p: Presentation): CloudPresentationDoc {
-  return {
+export function presentationToCloudDoc(p: Presentation, currentUser?: CurrentUser | null): CloudPresentationDoc {
+  // Determine creator metadata if not already present
+  let createdBy = p.createdBy;
+  let creatorPhone = p.creatorPhone;
+  let creatorName = p.creatorName;
+  let creatorRole = p.creatorRole;
+
+  if (!createdBy && currentUser) {
+    if (currentUser.role === 'super_admin') {
+      createdBy = 'super_admin';
+      creatorRole = 'super_admin';
+      creatorName = currentUser.fullName || 'Quản trị viên';
+    } else if (currentUser.role === 'member') {
+      createdBy = currentUser.memberId || currentUser.phone || 'member';
+      creatorRole = 'member';
+      creatorPhone = currentUser.phone;
+      creatorName = currentUser.fullName;
+    }
+  } else if (!createdBy) {
+    createdBy = 'system';
+    creatorRole = 'system';
+    creatorName = p.author || 'Hệ thống';
+  }
+
+  const docData: CloudPresentationDoc = {
     id: p.id,
     title: p.title || 'Bài giảng không tên',
     aspectRatio: p.aspectRatio || '16:9',
     themeId: p.themeId || 'modern-red',
-    author: p.author || 'Giáo viên',
+    author: p.author || (currentUser?.fullName || 'Giáo viên'),
     subject: p.subject || '',
     grade: p.grade || '',
     slidesJson: JSON.stringify(p.slides || []),
     updatedAt: p.updatedAt || new Date().toISOString(),
     createdAt: new Date().toISOString(),
-    lastEditorClientId: CLIENT_ID
+    lastEditorClientId: CLIENT_ID,
+    createdBy,
+    creatorRole,
+    creatorName: creatorName || p.author || 'Giáo viên'
   };
+
+  if (creatorPhone) {
+    docData.creatorPhone = creatorPhone;
+  }
+
+  return docData;
 }
 
 /**
@@ -70,7 +182,11 @@ export function cloudDocToPresentation(docData: any): Presentation | null {
       aspectRatio: docData.aspectRatio || '16:9',
       themeId: docData.themeId || docData.theme || 'modern-red',
       slides: slides,
-      updatedAt: docData.updatedAt || new Date().toISOString()
+      updatedAt: docData.updatedAt || new Date().toISOString(),
+      createdBy: docData.createdBy,
+      creatorPhone: docData.creatorPhone,
+      creatorName: docData.creatorName,
+      creatorRole: docData.creatorRole
     };
   } catch (e) {
     console.error('Error parsing cloud presentation document', e);
@@ -81,9 +197,12 @@ export function cloudDocToPresentation(docData: any): Presentation | null {
 /**
  * Saves a presentation to the shared cloud database (preserves offline & online)
  */
-export async function savePresentationToCloud(presentation: Presentation): Promise<void> {
+export async function savePresentationToCloud(
+  presentation: Presentation, 
+  currentUser?: CurrentUser | null
+): Promise<void> {
   const docRef = doc(db, 'presentations', presentation.id);
-  const data = presentationToCloudDoc(presentation);
+  const data = presentationToCloudDoc(presentation, currentUser);
   try {
     await setDoc(docRef, data, { merge: true });
   } catch (error) {
@@ -109,14 +228,36 @@ export async function setActivePresentationIdInCloud(presentationId: string): Pr
 
 /**
  * Deletes a presentation permanently from Cloud Firestore.
- * When deleted, it is completely removed and will never resurrect on any device or tab.
+ * Enforces ownership permission check before deletion.
  */
-export async function deletePresentationFromCloud(presentationId: string): Promise<void> {
+export async function deletePresentationFromCloud(
+  presentationId: string,
+  currentUser?: CurrentUser | null
+): Promise<{ success: boolean; message?: string }> {
   const docRef = doc(db, 'presentations', presentationId);
   try {
+    // If currentUser is specified, verify ownership authorization
+    if (currentUser) {
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const pres = cloudDocToPresentation(snap.data());
+        if (pres) {
+          const authCheck = canDeletePresentation(pres, currentUser);
+          if (!authCheck.allowed) {
+            return {
+              success: false,
+              message: authCheck.reason || 'Bạn không có quyền xóa bài giảng của người khác!'
+            };
+          }
+        }
+      }
+    }
+
     await deleteDoc(docRef);
-  } catch (error) {
+    return { success: true };
+  } catch (error: any) {
     handleFirestoreError(error, OperationType.DELETE, `presentations/${presentationId}`);
+    return { success: false, message: error?.message || 'Lỗi khi xóa bài giảng' };
   }
 }
 

@@ -48,6 +48,22 @@
         "lastEditorClientId": {
           "type": "string",
           "description": "Client ID of the last editor device"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "ID or role of the user who created this lecture (super_admin or member ID or system)"
+        },
+        "creatorPhone": {
+          "type": "string",
+          "description": "Phone number of member who created this presentation"
+        },
+        "creatorName": {
+          "type": "string",
+          "description": "Full name of the creator"
+        },
+        "creatorRole": {
+          "type": "string",
+          "description": "Role of the creator ('super_admin', 'member', 'system')"
         }
       },
       "required": ["id", "title", "slidesJson", "updatedAt"]
