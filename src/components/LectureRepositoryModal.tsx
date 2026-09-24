@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { Presentation } from '../types/presentation';
 import { CurrentUser } from '../types/auth';
-import { canDeletePresentation } from '../services/presentationCloudService';
+import { canDeletePresentation, canEditPresentation } from '../services/presentationCloudService';
 import { LECTURE_LIBRARY } from '../data/defaultLectures';
 import { EditLectureModal } from './EditLectureModal';
 
@@ -89,6 +89,16 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
   const isCurrentSaved = savedPresentations.some(s => s.id === currentPresentation.id);
 
   const handleSaveCurrent = () => {
+    if (!currentUser) {
+      setSaveNoticeMessage('⛔ Vui lòng đăng nhập tài khoản để thực hiện lưu bài giảng lên hệ thống!');
+      return;
+    }
+    const editCheck = canEditPresentation(currentPresentation, currentUser);
+    if (!editCheck.allowed) {
+      setSaveNoticeMessage(`⛔ ${editCheck.reason}`);
+      return;
+    }
+
     onSaveCurrentToLibrary();
     setActiveCategory('all');
     setSearchTerm('');
@@ -100,6 +110,11 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
   };
 
   const handleSaveAsNew = () => {
+    if (!currentUser) {
+      setSaveNoticeMessage('⛔ Vui lòng đăng nhập tài khoản để lưu bản sao bài giảng lên hệ thống!');
+      return;
+    }
+
     if (onSaveCurrentAsNewCopy) {
       onSaveCurrentAsNewCopy();
     } else {
@@ -387,8 +402,9 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
                 // Permission & Ownership calculation
                 const isSuperAdmin = currentUser?.role === 'super_admin';
                 const deletePerm = canDeletePresentation(presentation, currentUser);
+                const editPerm = canEditPresentation(presentation, currentUser);
                 const isMyLecture = Boolean(
-                  (currentUser?.role === 'member' && deletePerm.allowed) ||
+                  (currentUser?.role === 'member' && editPerm.allowed) ||
                   (isSuperAdmin && (presentation.createdBy === 'super_admin' || presentation.creatorRole === 'super_admin'))
                 );
 
@@ -535,18 +551,34 @@ export const LectureRepositoryModal: React.FC<LectureRepositoryModalProps> = ({
                         {/* Management action buttons */}
                         <div className="flex items-center gap-1.5">
                           {/* Chỉnh sửa thông tin bài giảng */}
-                          <button
-                            onClick={() => setEditingPresentation(presentation)}
-                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 bg-white border border-slate-200 rounded-lg transition"
-                            title="Chỉnh sửa thông tin bài giảng (Tiêu đề, môn học, khối lớp...)"
-                          >
-                            <Edit3 size={15} />
-                          </button>
+                          {editPerm.allowed ? (
+                            <button
+                              onClick={() => setEditingPresentation(presentation)}
+                              className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 bg-white border border-slate-200 rounded-lg transition cursor-pointer"
+                              title="Chỉnh sửa thông tin bài giảng (Tiêu đề, môn học, khối lớp...)"
+                            >
+                              <Edit3 size={15} />
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              className="p-1.5 text-slate-300 bg-slate-100 border border-slate-200 rounded-lg transition cursor-not-allowed opacity-60"
+                              title={editPerm.reason || 'Chỉ Quản trị viên hoặc người tạo bài giảng mới có quyền chỉnh sửa thông tin bài này'}
+                            >
+                              <Edit3 size={15} />
+                            </button>
+                          )}
 
                           {/* Tạo bản sao bài giảng */}
                           <button
-                            onClick={() => onDuplicatePresentation(presentation)}
-                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 bg-white border border-slate-200 rounded-lg transition"
+                            onClick={() => {
+                              if (!currentUser) {
+                                setSaveNoticeMessage('⛔ Vui lòng đăng nhập tài khoản để nhân bản bài giảng này thành bài giảng của bạn!');
+                                return;
+                              }
+                              onDuplicatePresentation(presentation);
+                            }}
+                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200 bg-white border border-slate-200 rounded-lg transition cursor-pointer"
                             title="Nhân bản bài giảng này thành bản sao mới của bạn"
                           >
                             <Copy size={15} />

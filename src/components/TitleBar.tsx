@@ -57,6 +57,7 @@ interface TitleBarProps {
   onOpenMemberManagement?: () => void;
   onOpenChangeAdminPassword?: () => void;
   onLogout?: () => void;
+  readOnly?: boolean;
 }
 
 export const TitleBar: React.FC<TitleBarProps> = ({
@@ -87,7 +88,8 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onOpenAuthModal,
   onOpenMemberManagement,
   onOpenChangeAdminPassword,
-  onLogout
+  onLogout,
+  readOnly = false
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
@@ -201,8 +203,17 @@ export const TitleBar: React.FC<TitleBarProps> = ({
       </div>
 
       {/* Center: Editable Presentation Title */}
-      <div className="flex-1 max-w-xl mx-4 flex justify-center">
-        {isEditingTitle ? (
+      <div className="flex-1 max-w-xl mx-4 flex justify-center items-center gap-1.5">
+        {readOnly ? (
+          <div 
+            className="px-3 py-1 rounded bg-black/20 text-xs font-semibold truncate max-w-md flex items-center gap-1.5 text-amber-200"
+            title="Chế độ chỉ xem: Bạn không thể đổi tên bài giảng này"
+          >
+            <Lock size={12} className="text-amber-300 shrink-0" />
+            <span className="truncate">{title}</span>
+            <span className="text-[10px] px-1.5 py-0.2 bg-amber-400/20 text-amber-200 rounded font-normal">Chỉ xem</span>
+          </div>
+        ) : isEditingTitle ? (
           <form onSubmit={handleTitleSubmit} className="w-full">
             <input
               type="text"

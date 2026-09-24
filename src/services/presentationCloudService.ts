@@ -51,7 +51,7 @@ export function canDeletePresentation(
     return { allowed: true };
   }
 
-  // 2. Chưa đăng nhập
+  // 2. Chưa đăng nhập: Tuyệt đối không được xóa
   if (!currentUser) {
     return {
       allowed: false,
@@ -69,8 +69,9 @@ export function canDeletePresentation(
 
   // 4. Thành viên (member): Chỉ được xóa bài do chính mình tạo
   if (currentUser.role === 'member') {
-    // Không thể xóa bài giảng mẫu của hệ thống hoặc của Quản trị viên
+    // Không thể xóa bài giảng mẫu của hệ thống hoặc của Quản trị viên hoặc bài có sẵn
     const isSystemOrAdmin = 
+      !presentation.createdBy ||
       presentation.createdBy === 'system' || 
       presentation.createdBy === 'super_admin' || 
       presentation.creatorRole === 'super_admin' || 
@@ -87,9 +88,10 @@ export function canDeletePresentation(
     const isOwnerById = Boolean(presentation.createdBy && currentUser.memberId && presentation.createdBy === currentUser.memberId);
     const isOwnerByPhone = Boolean(presentation.creatorPhone && currentUser.phone && presentation.creatorPhone === currentUser.phone);
     const isOwnerByName = Boolean(
+      presentation.creatorRole === 'member' &&
       currentUser.fullName && 
-      ((presentation.creatorName && presentation.creatorName.trim().toLowerCase() === currentUser.fullName.trim().toLowerCase()) ||
-       (presentation.author && presentation.author.trim().toLowerCase() === currentUser.fullName.trim().toLowerCase()))
+      presentation.creatorName &&
+      presentation.creatorName.trim().toLowerCase() === currentUser.fullName.trim().toLowerCase()
     );
 
     if (isOwnerById || isOwnerByPhone || isOwnerByName) {
@@ -99,13 +101,98 @@ export function canDeletePresentation(
     const ownerDesc = presentation.creatorName || presentation.author || 'thành viên khác';
     return {
       allowed: false,
-      reason: `Bảo vệ an toàn dữ liệu hệ thống: Bạn không có quyền xóa bài giảng của người khác (${ownerDesc}). Bạn chỉ được phép xóa bài giảng do chính mình đưa lên!`
+      reason: `Bảo vệ an toàn dữ liệu hệ thống: Bạn không có quyền xóa bài giảng của người khác (${ownerDesc}). Bạn chỉ được phép xóa bài giảng do chính mình tạo!`
     };
   }
 
   return {
     allowed: false,
     reason: 'Bạn không có quyền thực hiện thao tác xóa này.'
+  };
+}
+
+/**
+ * Checks whether the current user is allowed to edit, modify slides, add/delete elements or slides of a presentation.
+ * Security & Data Safety Rule:
+ * 1. Super Admin ('super_admin'): Full editing permissions on all presentations and all slides.
+ * 2. Unauthenticated user (!currentUser): CANNOT edit, delete, add slides, or modify anything. Must log in!
+ * 3. Member ('member'):
+ *    - CAN ONLY compose their own new lectures and save them to the cloud system.
+ *    - For existing lectures created by others or admin/system: THEY CAN ONLY VIEW AND PRESENT (slide show).
+ *      THEY CANNOT edit or delete any slide or any content.
+ *    - They have full rights to edit and delete lectures created by themselves.
+ */
+export function canEditPresentation(
+  presentation: Presentation,
+  currentUser?: CurrentUser | null
+): { allowed: boolean; isOwner: boolean; reason?: string } {
+  // 1. Quản trị viên cao nhất (super_admin): Toàn quyền chỉnh sửa mọi bài giảng
+  if (currentUser?.role === 'super_admin') {
+    return { allowed: true, isOwner: true };
+  }
+
+  // 2. Chưa đăng nhập: Tuyệt đối không có quyền chỉnh sửa hoặc xóa bất kỳ bài giảng nào
+  if (!currentUser) {
+    return {
+      allowed: false,
+      isOwner: false,
+      reason: 'Vui lòng đăng nhập tài khoản để thực hiện thao tác soạn bài mới, chỉnh sửa hoặc xóa slide!'
+    };
+  }
+
+  // 3. Tài khoản thành viên chỉ xem (viewer)
+  if (currentUser.role === 'member' && currentUser.permission === 'viewer') {
+    return {
+      allowed: false,
+      isOwner: false,
+      reason: 'Tài khoản của bạn được cấp quyền "Chỉ xem". Bạn chỉ được xem và trình chiếu bài giảng!'
+    };
+  }
+
+  // 4. Thành viên (member): Chỉ được sửa bài giảng do chính mình tạo
+  if (currentUser.role === 'member') {
+    // Không thể chỉnh sửa bài giảng mẫu của hệ thống hoặc bài giảng của Quản trị viên hoặc bài có sẵn
+    const isSystemOrAdmin = 
+      !presentation.createdBy ||
+      presentation.createdBy === 'system' || 
+      presentation.createdBy === 'super_admin' || 
+      presentation.creatorRole === 'super_admin' || 
+      presentation.creatorRole === 'system';
+
+    if (isSystemOrAdmin) {
+      return {
+        allowed: false,
+        isOwner: false,
+        reason: 'Bài giảng này do Quản trị viên / Hệ thống tạo. Bạn chỉ có quyền xem và trình chiếu. Để chỉnh sửa theo ý mình, hãy chọn "Tạo bản sao" để nhân bản thành bài giảng của bạn!'
+      };
+    }
+
+    // Kiểm tra quyền sở hữu của thành viên
+    const isOwnerById = Boolean(presentation.createdBy && currentUser.memberId && presentation.createdBy === currentUser.memberId);
+    const isOwnerByPhone = Boolean(presentation.creatorPhone && currentUser.phone && presentation.creatorPhone === currentUser.phone);
+    const isOwnerByName = Boolean(
+      presentation.creatorRole === 'member' &&
+      currentUser.fullName && 
+      presentation.creatorName &&
+      presentation.creatorName.trim().toLowerCase() === currentUser.fullName.trim().toLowerCase()
+    );
+
+    if (isOwnerById || isOwnerByPhone || isOwnerByName) {
+      return { allowed: true, isOwner: true };
+    }
+
+    const ownerDesc = presentation.creatorName || presentation.author || 'thành viên khác';
+    return {
+      allowed: false,
+      isOwner: false,
+      reason: `Bài giảng này do ${ownerDesc} tạo. Bạn chỉ có quyền xem và trình chiếu. Để chỉnh sửa theo ý mình, hãy chọn "Tạo bản sao" để nhân bản thành bài giảng của bạn!`
+    };
+  }
+
+  return {
+    allowed: false,
+    isOwner: false,
+    reason: 'Bạn không có quyền chỉnh sửa bài giảng này.'
   };
 }
 
@@ -199,8 +286,17 @@ export function cloudDocToPresentation(docData: any): Presentation | null {
  */
 export async function savePresentationToCloud(
   presentation: Presentation, 
-  currentUser?: CurrentUser | null
+  currentUser?: CurrentUser | null,
+  skipPermissionCheck: boolean = false
 ): Promise<void> {
+  // Enforce permission check unless explicitly skipped (e.g. system seed)
+  if (!skipPermissionCheck) {
+    const editCheck = canEditPresentation(presentation, currentUser);
+    if (!editCheck.allowed) {
+      throw new Error(editCheck.reason || 'Bạn không có quyền chỉnh sửa hoặc lưu bài giảng này.');
+    }
+  }
+
   const docRef = doc(db, 'presentations', presentation.id);
   const data = presentationToCloudDoc(presentation, currentUser);
   try {
@@ -228,27 +324,33 @@ export async function setActivePresentationIdInCloud(presentationId: string): Pr
 
 /**
  * Deletes a presentation permanently from Cloud Firestore.
- * Enforces ownership permission check before deletion.
+ * Enforces authentication and ownership permission check before deletion.
  */
 export async function deletePresentationFromCloud(
   presentationId: string,
   currentUser?: CurrentUser | null
 ): Promise<{ success: boolean; message?: string }> {
+  // 1. Phải đăng nhập mới được xóa
+  if (!currentUser) {
+    return {
+      success: false,
+      message: 'Vui lòng đăng nhập tài khoản để thực hiện thao tác xóa bài giảng!'
+    };
+  }
+
   const docRef = doc(db, 'presentations', presentationId);
   try {
-    // If currentUser is specified, verify ownership authorization
-    if (currentUser) {
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        const pres = cloudDocToPresentation(snap.data());
-        if (pres) {
-          const authCheck = canDeletePresentation(pres, currentUser);
-          if (!authCheck.allowed) {
-            return {
-              success: false,
-              message: authCheck.reason || 'Bạn không có quyền xóa bài giảng của người khác!'
-            };
-          }
+    // 2. Xác thực quyền xóa đối với bài giảng mục tiêu
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const pres = cloudDocToPresentation(snap.data());
+      if (pres) {
+        const authCheck = canDeletePresentation(pres, currentUser);
+        if (!authCheck.allowed) {
+          return {
+            success: false,
+            message: authCheck.reason || 'Bảo vệ an toàn dữ liệu: Bạn không có quyền xóa bài giảng của người khác!'
+          };
         }
       }
     }
@@ -282,7 +384,7 @@ export async function initCloudRepository(): Promise<void> {
     if (existingSnap.empty) {
       // Seed default lectures into Firestore
       for (const sample of LECTURE_LIBRARY) {
-        await savePresentationToCloud(sample);
+        await savePresentationToCloud(sample, null, true);
       }
     }
 
@@ -302,7 +404,7 @@ export async function initCloudRepository(): Promise<void> {
  */
 export async function restoreDefaultLecturesToCloud(): Promise<void> {
   for (const sample of LECTURE_LIBRARY) {
-    await savePresentationToCloud(sample);
+    await savePresentationToCloud(sample, null, true);
   }
   await setActivePresentationIdInCloud(DEFAULT_PRESENTATION.id);
 }

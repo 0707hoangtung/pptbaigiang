@@ -1,6 +1,6 @@
 import React from 'react';
 import { Slide } from '../types/presentation';
-import { Plus, Copy, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, Copy, Trash2, ArrowLeft, Lock } from 'lucide-react';
 
 interface SlideSorterViewProps {
   slides: Slide[];
@@ -11,6 +11,7 @@ interface SlideSorterViewProps {
   onDeleteSlide: (index: number) => void;
   onCloseSorter: () => void;
   defaultSlideBg: string;
+  readOnly?: boolean;
 }
 
 export const SlideSorterView: React.FC<SlideSorterViewProps> = ({
@@ -21,7 +22,8 @@ export const SlideSorterView: React.FC<SlideSorterViewProps> = ({
   onDuplicateSlide,
   onDeleteSlide,
   onCloseSorter,
-  defaultSlideBg
+  defaultSlideBg,
+  readOnly = false
 }) => {
   return (
     <div className="flex-1 bg-[#d8dde6] p-6 overflow-y-auto flex flex-col">
@@ -30,23 +32,39 @@ export const SlideSorterView: React.FC<SlideSorterViewProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onCloseSorter}
-            className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg text-xs font-semibold text-slate-700 flex items-center gap-1.5 shadow-xs"
+            className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg text-xs font-semibold text-slate-700 flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <ArrowLeft size={14} />
             <span>Quay lại soạn thảo</span>
           </button>
-          <h2 className="text-base font-bold text-slate-800">
-            Bảng Sắp Xếp Trang Chiếu ({slides.length} trang)
+          <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+            <span>Bảng Sắp Xếp Trang Chiếu ({slides.length} trang)</span>
+            {readOnly && (
+              <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold border border-amber-300">
+                <Lock size={11} /> Chế độ chỉ xem
+              </span>
+            )}
           </h2>
         </div>
 
-        <button
-          onClick={onAddSlide}
-          className="px-3.5 py-1.5 bg-[#c43e1c] hover:bg-[#a83214] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
-        >
-          <Plus size={14} />
-          <span>Thêm trang chiếu mới</span>
-        </button>
+        {!readOnly ? (
+          <button
+            onClick={onAddSlide}
+            className="px-3.5 py-1.5 bg-[#c43e1c] hover:bg-[#a83214] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+          >
+            <Plus size={14} />
+            <span>Thêm trang chiếu mới</span>
+          </button>
+        ) : (
+          <button
+            onClick={onAddSlide}
+            className="px-3.5 py-1.5 bg-slate-200 border border-slate-300 text-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer"
+            title="Đăng nhập hoặc tạo bản sao để thêm trang chiếu"
+          >
+            <Lock size={13} className="text-amber-600" />
+            <span>Thêm trang chiếu (Cần bản sao)</span>
+          </button>
+        )}
       </div>
 
       {/* Grid of slides */}
@@ -111,30 +129,32 @@ export const SlideSorterView: React.FC<SlideSorterViewProps> = ({
                 </div>
 
                 {/* Hover overlay quick actions */}
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition flex items-center space-x-1 bg-black/70 rounded-md p-1 pointer-events-auto">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDuplicateSlide(index);
-                    }}
-                    className="p-1 text-white hover:text-amber-300"
-                    title="Nhân đôi slide"
-                  >
-                    <Copy size={13} />
-                  </button>
-                  {slides.length > 1 && (
+                {!readOnly && (
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition flex items-center space-x-1 bg-black/70 rounded-md p-1 pointer-events-auto">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDeleteSlide(index);
+                        onDuplicateSlide(index);
                       }}
-                      className="p-1 text-red-300 hover:text-red-100"
-                      title="Xóa slide"
+                      className="p-1 text-white hover:text-amber-300"
+                      title="Nhân đôi slide"
                     >
-                      <Trash2 size={13} />
+                      <Copy size={13} />
                     </button>
-                  )}
-                </div>
+                    {slides.length > 1 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteSlide(index);
+                        }}
+                        className="p-1 text-red-300 hover:text-red-100"
+                        title="Xóa slide"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Slide Number & Title Label */}

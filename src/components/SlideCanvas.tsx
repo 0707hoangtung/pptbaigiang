@@ -18,6 +18,7 @@ interface SlideCanvasProps {
   previewAnimationElementId?: string | null;
   aspectRatio: '16:9' | '4:3';
   zoomLevel: number; // 50 to 150 percent
+  readOnly?: boolean;
 }
 
 export const SlideCanvas: React.FC<SlideCanvasProps> = ({
@@ -34,7 +35,8 @@ export const SlideCanvas: React.FC<SlideCanvasProps> = ({
   onOpenAnimationsTab,
   previewAnimationElementId,
   aspectRatio,
-  zoomLevel
+  zoomLevel,
+  readOnly = false
 }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -65,6 +67,7 @@ export const SlideCanvas: React.FC<SlideCanvasProps> = ({
   const handleMouseDown = (e: React.MouseEvent, element: SlideElement) => {
     e.stopPropagation();
     onSelectElement(element.id);
+    if (readOnly) return; // Do not drag if readOnly!
 
     if (canvasRef.current) {
       setDragStart({
@@ -80,6 +83,7 @@ export const SlideCanvas: React.FC<SlideCanvasProps> = ({
   // Handle Resizing element
   const handleResizeHandleDown = (e: React.MouseEvent, handle: string, element: SlideElement) => {
     e.stopPropagation();
+    if (readOnly) return;
     setIsResizing(handle);
     setResizeStart({
       mouseX: e.clientX,
@@ -242,6 +246,7 @@ export const SlideCanvas: React.FC<SlideCanvasProps> = ({
                 <SlideElementRenderer
                   element={element}
                   isSelected={isSelected}
+                  readOnly={readOnly}
                   onUpdateText={(newText) => onUpdateElement({ text: newText } as any)}
                   onUpdateTableCell={(row, col, val) => {
                     if (element.type === 'table') {
@@ -253,8 +258,8 @@ export const SlideCanvas: React.FC<SlideCanvasProps> = ({
                   }}
                 />
 
-                {/* Selection Handles (When selected) */}
-                {isSelected && (
+                {/* Selection Handles & Action Bar (Only when selected and NOT in readOnly mode) */}
+                {isSelected && !readOnly && (
                   <>
                     {/* Floating Action Bar */}
                     <div 

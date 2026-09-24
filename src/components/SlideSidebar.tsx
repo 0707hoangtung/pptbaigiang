@@ -6,7 +6,8 @@ import {
   ChevronUp, 
   ChevronDown, 
   FilePlus, 
-  MoreVertical 
+  MoreVertical,
+  Lock
 } from 'lucide-react';
 import { Slide } from '../types/presentation';
 
@@ -20,6 +21,7 @@ interface SlideSidebarProps {
   onMoveSlide: (fromIndex: number, toIndex: number) => void;
   aspectRatio: '16:9' | '4:3';
   defaultSlideBg: string;
+  readOnly?: boolean;
 }
 
 export const SlideSidebar: React.FC<SlideSidebarProps> = ({
@@ -31,7 +33,8 @@ export const SlideSidebar: React.FC<SlideSidebarProps> = ({
   onDeleteSlide,
   onMoveSlide,
   aspectRatio,
-  defaultSlideBg
+  defaultSlideBg,
+  readOnly = false
 }) => {
   return (
     <div className="w-48 sm:w-52 md:w-56 bg-[#e9ecef] border-r border-[#dadce0] flex flex-col shrink-0 select-none">
@@ -42,15 +45,30 @@ export const SlideSidebar: React.FC<SlideSidebarProps> = ({
           <span className="text-[10px] px-1.5 py-0.2 bg-slate-300 rounded-full font-bold text-slate-800">
             {slides.length}
           </span>
+          {readOnly && (
+            <span className="flex items-center gap-0.5 text-[9.5px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-300 ml-1" title="Bài giảng đang ở chế độ xem và trình chiếu bảo vệ">
+              <Lock size={9} /> Chỉ xem
+            </span>
+          )}
         </span>
-        <button
-          onClick={onAddSlide}
-          className="p-1 rounded hover:bg-slate-300 text-slate-800 transition flex items-center gap-1 text-[11px] font-medium"
-          title="Thêm slide mới (+)"
-        >
-          <Plus size={14} />
-          <span className="hidden sm:inline">Thêm</span>
-        </button>
+        {!readOnly ? (
+          <button
+            onClick={onAddSlide}
+            className="p-1 rounded hover:bg-slate-300 text-slate-800 transition flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+            title="Thêm slide mới (+)"
+          >
+            <Plus size={14} />
+            <span className="hidden sm:inline">Thêm</span>
+          </button>
+        ) : (
+          <button
+            onClick={onAddSlide}
+            className="p-1 rounded hover:bg-slate-300 text-slate-500 transition flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+            title="Đăng nhập hoặc tạo bản sao để thêm slide mới"
+          >
+            <Lock size={12} className="text-slate-500" />
+          </button>
+        )}
       </div>
 
       {/* Slide Thumbnails Scrollable List */}
@@ -136,51 +154,63 @@ export const SlideSidebar: React.FC<SlideSidebarProps> = ({
                   })}
                 </div>
 
-                {/* Hover Action Menu for current slide */}
-                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition flex items-center space-x-0.5 bg-black/60 rounded p-0.5 pointer-events-auto">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (index > 0) onMoveSlide(index, index - 1);
-                    }}
-                    disabled={index === 0}
-                    className="p-0.5 text-white/80 hover:text-white disabled:opacity-30"
-                    title="Lên trên"
-                  >
-                    <ChevronUp size={12} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (index < slides.length - 1) onMoveSlide(index, index + 1);
-                    }}
-                    disabled={index === slides.length - 1}
-                    className="p-0.5 text-white/80 hover:text-white disabled:opacity-30"
-                    title="Xuống dưới"
-                  >
-                    <ChevronDown size={12} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDuplicateSlide(index);
-                    }}
-                    className="p-0.5 text-white/80 hover:text-white"
-                    title="Nhân bản slide"
-                  >
-                    <Copy size={11} />
-                  </button>
-                  {slides.length > 1 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteSlide(index);
-                      }}
-                      className="p-0.5 text-red-300 hover:text-red-100"
-                      title="Xóa slide"
+                {/* Hover Action Menu for current slide: Protected if readOnly */}
+                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition flex items-center space-x-0.5 bg-black/70 rounded p-0.5 pointer-events-auto">
+                  {readOnly ? (
+                    <div 
+                      className="p-1 text-amber-300 flex items-center gap-1 text-[10px] font-semibold"
+                      title="Chế độ chỉ xem: Bạn không thể sửa hoặc xóa slide của bài giảng này"
                     >
-                      <Trash2 size={11} />
-                    </button>
+                      <Lock size={12} />
+                      <span className="text-[9px]">Bảo vệ</span>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (index > 0) onMoveSlide(index, index - 1);
+                        }}
+                        disabled={index === 0}
+                        className="p-0.5 text-white/80 hover:text-white disabled:opacity-30"
+                        title="Lên trên"
+                      >
+                        <ChevronUp size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (index < slides.length - 1) onMoveSlide(index, index + 1);
+                        }}
+                        disabled={index === slides.length - 1}
+                        className="p-0.5 text-white/80 hover:text-white disabled:opacity-30"
+                        title="Xuống dưới"
+                      >
+                        <ChevronDown size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDuplicateSlide(index);
+                        }}
+                        className="p-0.5 text-white/80 hover:text-white"
+                        title="Nhân bản slide"
+                      >
+                        <Copy size={11} />
+                      </button>
+                      {slides.length > 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteSlide(index);
+                          }}
+                          className="p-0.5 text-red-300 hover:text-red-100"
+                          title="Xóa slide"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -193,10 +223,19 @@ export const SlideSidebar: React.FC<SlideSidebarProps> = ({
       <div className="p-2 border-t border-[#dadce0] bg-[#f8f9fa]">
         <button
           onClick={onAddSlide}
-          className="w-full py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-300 rounded text-xs font-semibold text-slate-700 flex items-center justify-center gap-1.5 transition shadow-xs"
+          className="w-full py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-300 rounded text-xs font-semibold text-slate-700 flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
         >
-          <Plus size={14} className="text-[#c43e1c]" />
-          <span>Thêm slide mới</span>
+          {readOnly ? (
+            <>
+              <Lock size={13} className="text-amber-600" />
+              <span>Thêm slide (Cần bản sao)</span>
+            </>
+          ) : (
+            <>
+              <Plus size={14} className="text-[#c43e1c]" />
+              <span>Thêm slide mới</span>
+            </>
+          )}
         </button>
       </div>
     </div>

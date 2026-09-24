@@ -37,6 +37,7 @@ interface SlideElementRendererProps {
   onUpdateText?: (newText: string) => void;
   onUpdateTableCell?: (rowIndex: number, colIndex: number, val: string) => void;
   isPresenterMode?: boolean;
+  readOnly?: boolean;
 }
 
 export const SlideElementRenderer: React.FC<SlideElementRendererProps> = ({
@@ -44,9 +45,11 @@ export const SlideElementRenderer: React.FC<SlideElementRendererProps> = ({
   isSelected,
   onUpdateText,
   onUpdateTableCell,
-  isPresenterMode = false
+  isPresenterMode = false,
+  readOnly = false
 }) => {
   const [isEditingInline, setIsEditingInline] = useState(false);
+  const isLocked = isPresenterMode || readOnly;
 
   // 1. TEXT ELEMENT
   if (element.type === 'text') {
@@ -54,7 +57,7 @@ export const SlideElementRenderer: React.FC<SlideElementRendererProps> = ({
     const hasImage = Boolean(textEl.imageUrl);
     const imgPos = textEl.imagePosition || 'top';
 
-    if (isEditingInline && !isPresenterMode) {
+    if (isEditingInline && !isLocked) {
       return (
         <div className="w-full h-full flex flex-col p-1.5 bg-black/30 rounded border border-blue-400 overflow-hidden">
           {hasImage && imgPos === 'top' && (
@@ -96,7 +99,7 @@ export const SlideElementRenderer: React.FC<SlideElementRendererProps> = ({
 
     return (
       <div
-        onDoubleClick={() => !isPresenterMode && setIsEditingInline(true)}
+        onDoubleClick={() => !isLocked && setIsEditingInline(true)}
         className="w-full h-full flex flex-col select-none overflow-hidden"
         style={{
           fontSize: `${textEl.fontSize}px`,
@@ -242,7 +245,7 @@ export const SlideElementRenderer: React.FC<SlideElementRendererProps> = ({
 
         {shapeEl.text && (
           <div 
-            onDoubleClick={() => !isPresenterMode && setIsEditingInline(true)}
+            onDoubleClick={() => !isLocked && setIsEditingInline(true)}
             className="relative z-10 p-2 text-center select-none font-medium leading-tight max-w-[90%]"
             style={{
               color: shapeEl.textColor || '#ffffff',
@@ -289,7 +292,7 @@ export const SlideElementRenderer: React.FC<SlideElementRendererProps> = ({
             <tr style={{ backgroundColor: tblEl.headerBgColor || '#0284c7', color: tblEl.headerTextColor || '#ffffff' }}>
               {tblEl.data[0]?.map((head, colIdx) => (
                 <th key={colIdx} className="p-2.5 font-bold border border-white/20">
-                  {isPresenterMode ? (
+                  {isLocked ? (
                     head
                   ) : (
                     <input
@@ -314,7 +317,7 @@ export const SlideElementRenderer: React.FC<SlideElementRendererProps> = ({
               >
                 {row.map((cell, cIdx) => (
                   <td key={cIdx} className="p-2 border border-white/15">
-                    {isPresenterMode ? (
+                    {isLocked ? (
                       cell
                     ) : (
                       <input

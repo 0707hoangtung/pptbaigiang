@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Presentation, 
   Slide, 
@@ -40,6 +40,7 @@ import {
   setActivePresentationIdInCloud,
   deletePresentationFromCloud,
   canDeletePresentation,
+  canEditPresentation,
   subscribeToCloudLibrary,
   subscribeToSinglePresentation,
   subscribeToCloudActiveState,
@@ -49,7 +50,7 @@ import {
   restoreDefaultLecturesToCloud,
   CLIENT_ID
 } from './services/presentationCloudService';
-import { CheckCircle, Info, FileUp } from 'lucide-react';
+import { CheckCircle, Info, FileUp, Lock, Copy, Plus } from 'lucide-react';
 import { CurrentUser } from './types/auth';
 import { getSavedCurrentUser, saveCurrentUser } from './services/authService';
 import { AuthModal } from './components/AuthModal';
@@ -267,13 +268,28 @@ export default function App() {
   const [authModalMode, setAuthModalMode] = useState<'login' | 'change_admin_pw'>('login');
   const [isMemberManagementOpen, setIsMemberManagementOpen] = useState<boolean>(false);
 
+  // Permissions & Editability computation for current presentation & current user
+  const isReadOnly = useMemo(() => {
+    const check = canEditPresentation(presentation, currentUser);
+    return !check.allowed;
+  }, [presentation, currentUser]);
+
   const checkEditPermission = useCallback((): boolean => {
-    if (currentUser?.role === 'member' && currentUser?.permission === 'viewer') {
-      showToast('⚠️ Tài khoản của bạn được cấp quyền "Chỉ xem". Bạn không thể chỉnh sửa hoặc lưu bài giảng này!');
+    // 1. Phải đăng nhập tài khoản trước
+    if (!currentUser) {
+      showToast('⚠️ Vui lòng đăng nhập tài khoản để thực hiện thao tác này!');
+      handleOpenAuthModal();
+      return false;
+    }
+
+    // 2. Kiểm tra quyền của người dùng đối với bài giảng hiện tại
+    const check = canEditPresentation(presentation, currentUser);
+    if (!check.allowed) {
+      showToast(`⛔ ${check.reason || 'Bạn chỉ có quyền xem và trình chiếu bài giảng này, không được chỉnh sửa hoặc xóa slide!'}`);
       return false;
     }
     return true;
-  }, [currentUser]);
+  }, [currentUser, presentation]);
 
   const handleOpenAuthModal = () => {
     setAuthModalMode('login');
@@ -344,6 +360,7 @@ export default function App() {
     if (!isRealtimeEnabled) return;
     if (!isCloudHydrated) return; // Prevent overwriting cloud data during initial hydration
     if (!isUserModifiedRef.current) return; // Only sync to cloud if local changes were made
+    if (isReadOnly) return; // BẢO VỆ TUYỆT ĐỐI: Không bao giờ tự động lưu nếu bài giảng đang ở chế độ Chỉ xem!
 
     setIsRealtimeSyncing(true);
     const timer = setTimeout(() => {
@@ -352,7 +369,7 @@ export default function App() {
         localStorage.setItem('kho_bai_giang_active', JSON.stringify(presentation));
 
         // 2. Persist to Cloud Firestore (offline IndexedDB persistent cache + multi-device cloud sync)
-        savePresentationToCloud(presentation).catch((err) => {
+        savePresentationToCloud(presentation, currentUser).catch((err) => {
           console.warn('Auto-save queued in persistent cache:', err);
         });
         setActivePresentationIdInCloud(presentation.id).catch((err) => {
@@ -389,7 +406,7 @@ export default function App() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [presentation, isRealtimeEnabled, isCloudHydrated]);
+  }, [presentation, isRealtimeEnabled, isCloudHydrated, isReadOnly, currentUser]);
 
   // Current slide
   const currentSlide = presentation.slides[activeSlideIndex] || presentation.slides[0];
@@ -512,6 +529,7 @@ export default function App() {
 
   // Slide CRUD Actions
   const handleAddSlide = (layout: string = 'title-content') => {
+    if (!checkEditPermission()) return;
     const newSlideId = `slide-${Date.now()}`;
     let newElements: SlideElement[] = [];
 
@@ -672,6 +690,7 @@ export default function App() {
   };
 
   const handleDuplicateSlide = (index: number) => {
+    if (!checkEditPermission()) return;
     const slideToCopy = presentation.slides[index];
     const newSlide: Slide = {
       ...slideToCopy,
@@ -691,7 +710,11 @@ export default function App() {
   };
 
   const handleDeleteSlide = (index: number) => {
-    if (presentation.slides.length <= 1) return;
+    if (!checkEditPermission()) return;
+    if (presentation.slides.length <= 1) {
+      showToast('Bài giảng phải có ít nhất 1 trang chiếu.');
+      return;
+    }
     const newSlides = presentation.slides.filter((_, i) => i !== index);
     const nextIndex = Math.min(index, newSlides.length - 1);
 
@@ -701,9 +724,11 @@ export default function App() {
     }));
     setActiveSlideIndex(nextIndex);
     setSelectedElementId(null);
+    showToast('Đã xóa trang chiếu thành công.');
   };
 
   const handleMoveSlide = (fromIndex: number, toIndex: number) => {
+    if (!checkEditPermission()) return;
     const newSlides = [...presentation.slides];
     const [moved] = newSlides.splice(fromIndex, 1);
     newSlides.splice(toIndex, 0, moved);
@@ -717,6 +742,7 @@ export default function App() {
 
   // Element CRUD Actions
   const handleUpdateElement = (updated: Partial<SlideElement>) => {
+    if (!checkEditPermission()) return;
     if (!selectedElementId) return;
 
     updatePresentationWithHistory(prev => {
@@ -734,6 +760,7 @@ export default function App() {
   };
 
   const handleDeleteElement = () => {
+    if (!checkEditPermission()) return;
     if (!selectedElementId) return;
 
     updatePresentationWithHistory(prev => {
@@ -747,6 +774,7 @@ export default function App() {
   };
 
   const handleDuplicateElement = () => {
+    if (!checkEditPermission()) return;
     if (!selectedElement) return;
 
     const newElement: SlideElement = {
@@ -868,6 +896,7 @@ export default function App() {
 
   // Insert Helpers
   const addElementToCurrentSlide = (newElement: SlideElement) => {
+    if (!checkEditPermission()) return;
     updatePresentationWithHistory(prev => {
       const slides = [...prev.slides];
       const slide = { ...slides[activeSlideIndex] };
@@ -1242,19 +1271,34 @@ export default function App() {
   // Presentation Management & Library Persistence
   const handleSaveCurrentToLibrary = (asNewCopy: boolean = false) => {
     try {
+      // 1. Phải đăng nhập
+      if (!currentUser) {
+        showToast('⚠️ Vui lòng đăng nhập tài khoản để lưu bài giảng lên hệ thống!');
+        handleOpenAuthModal();
+        return;
+      }
+
+      // 2. Nếu là thành viên nhưng không sở hữu bài giảng này và chưa chọn lưu bản sao, tự động chuyển sang lưu bản sao
+      const editCheck = canEditPresentation(presentation, currentUser);
+      if (!editCheck.allowed && !asNewCopy) {
+        showToast('ℹ️ Bài giảng này của Quản trị viên/người khác. Hệ thống đã lưu thành bản sao mới do bạn làm chủ!');
+        handleSaveCurrentToLibrary(true);
+        return;
+      }
+
       let lectureToSave: Presentation = {
         ...presentation,
         updatedAt: new Date().toISOString()
       };
 
       // Set or inherit creator credentials
-      if (currentUser?.role === 'super_admin') {
+      if (currentUser.role === 'super_admin') {
         if (!lectureToSave.createdBy || asNewCopy) {
           lectureToSave.createdBy = 'super_admin';
           lectureToSave.creatorRole = 'super_admin';
           lectureToSave.creatorName = currentUser.fullName || 'Quản trị viên';
         }
-      } else if (currentUser?.role === 'member') {
+      } else if (currentUser.role === 'member') {
         if (!lectureToSave.createdBy || asNewCopy) {
           lectureToSave.createdBy = currentUser.memberId || currentUser.phone || 'member';
           lectureToSave.creatorPhone = currentUser.phone;
@@ -1330,14 +1374,20 @@ export default function App() {
   };
 
   const handleDuplicatePresentation = (target: Presentation) => {
+    if (!currentUser) {
+      showToast('⚠️ Vui lòng đăng nhập tài khoản để tạo bản sao bài giảng!');
+      handleOpenAuthModal();
+      return;
+    }
+
     let creatorProps: Partial<Presentation> = {};
-    if (currentUser?.role === 'super_admin') {
+    if (currentUser.role === 'super_admin') {
       creatorProps = {
         createdBy: 'super_admin',
         creatorRole: 'super_admin',
         creatorName: currentUser.fullName || 'Quản trị viên'
       };
-    } else if (currentUser?.role === 'member') {
+    } else if (currentUser.role === 'member') {
       creatorProps = {
         createdBy: currentUser.memberId || currentUser.phone || 'member',
         creatorPhone: currentUser.phone,
@@ -1421,19 +1471,26 @@ export default function App() {
   };
 
   const handleNewPresentation = () => {
+    if (!currentUser) {
+      showToast('⚠️ Vui lòng đăng nhập tài khoản để soạn bài giảng mới!');
+      handleOpenAuthModal();
+      return;
+    }
+
     let creatorProps: Partial<Presentation> = {};
-    if (currentUser?.role === 'super_admin') {
+    if (currentUser.role === 'super_admin') {
       creatorProps = {
         createdBy: 'super_admin',
         creatorRole: 'super_admin',
         creatorName: currentUser.fullName || 'Quản trị viên'
       };
-    } else if (currentUser?.role === 'member') {
+    } else if (currentUser.role === 'member') {
       creatorProps = {
         createdBy: currentUser.memberId || currentUser.phone || 'member',
         creatorPhone: currentUser.phone,
         creatorName: currentUser.fullName,
-        creatorRole: 'member'
+        creatorRole: 'member',
+        author: currentUser.fullName
       };
     }
 
@@ -1442,7 +1499,7 @@ export default function App() {
       title: 'Bài Giảng Mới Chưa Đặt Tên',
       subject: 'Môn học',
       grade: 'Khối lớp',
-      author: currentUser?.fullName || 'Giáo viên',
+      author: currentUser.fullName || 'Giáo viên',
       updatedAt: new Date().toISOString(),
       aspectRatio: '16:9',
       themeId: 'ocean-blue',
@@ -1480,9 +1537,10 @@ export default function App() {
     isUserModifiedRef.current = false;
     setActiveSlideIndex(0);
     setSelectedElementId(null);
-    savePresentationToCloud(blankPresentation).catch(console.warn);
+    savePresentationToCloud(blankPresentation, currentUser).catch(console.warn);
     setActivePresentationIdInCloud(blankPresentation.id).catch(console.warn);
     setIsRepositoryOpen(false);
+    showToast('✨ Đã tạo bài giảng mới! Bạn có thể thoải mái soạn và lưu lên hệ thống.');
   };
 
   const handleExportPPTX = async () => {
@@ -1511,6 +1569,11 @@ export default function App() {
   };
 
   const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!currentUser) {
+      showToast('⚠️ Vui lòng đăng nhập tài khoản để nhập tệp bài giảng vào hệ thống!');
+      handleOpenAuthModal();
+      return;
+    }
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -1519,13 +1582,13 @@ export default function App() {
           const imported = JSON.parse(event.target?.result as string);
           if (imported.slides && Array.isArray(imported.slides)) {
             let creatorProps: Partial<Presentation> = {};
-            if (currentUser?.role === 'super_admin') {
+            if (currentUser.role === 'super_admin') {
               creatorProps = {
                 createdBy: 'super_admin',
                 creatorRole: 'super_admin',
                 creatorName: currentUser.fullName || 'Quản trị viên'
               };
-            } else if (currentUser?.role === 'member') {
+            } else if (currentUser.role === 'member') {
               creatorProps = {
                 createdBy: currentUser.memberId || currentUser.phone || 'member',
                 creatorPhone: currentUser.phone,
@@ -1574,14 +1637,20 @@ export default function App() {
 
   // PowerPoint Import Handlers
   const handleOpenPptxForEdit = (importedPresentation: Presentation) => {
+    if (!currentUser) {
+      showToast('⚠️ Vui lòng đăng nhập tài khoản để chỉnh sửa bài giảng PowerPoint!');
+      handleOpenAuthModal();
+      return;
+    }
+
     let creatorProps: Partial<Presentation> = {};
-    if (currentUser?.role === 'super_admin') {
+    if (currentUser.role === 'super_admin') {
       creatorProps = {
         createdBy: 'super_admin',
         creatorRole: 'super_admin',
         creatorName: currentUser.fullName || 'Quản trị viên'
       };
-    } else if (currentUser?.role === 'member') {
+    } else if (currentUser.role === 'member') {
       creatorProps = {
         createdBy: currentUser.memberId || currentUser.phone || 'member',
         creatorPhone: currentUser.phone,
@@ -1646,14 +1715,20 @@ export default function App() {
   };
 
   const handleSavePptxToLibrary = (importedPresentation: Presentation) => {
+    if (!currentUser) {
+      showToast('⚠️ Vui lòng đăng nhập tài khoản để lưu bài giảng PowerPoint lên hệ thống!');
+      handleOpenAuthModal();
+      return;
+    }
+
     let creatorProps: Partial<Presentation> = {};
-    if (currentUser?.role === 'super_admin') {
+    if (currentUser.role === 'super_admin') {
       creatorProps = {
         createdBy: 'super_admin',
         creatorRole: 'super_admin',
         creatorName: currentUser.fullName || 'Quản trị viên'
       };
-    } else if (currentUser?.role === 'member') {
+    } else if (currentUser.role === 'member') {
       creatorProps = {
         createdBy: currentUser.memberId || currentUser.phone || 'member',
         creatorPhone: currentUser.phone,
@@ -1716,12 +1791,14 @@ export default function App() {
         onOpenMemberManagement={() => setIsMemberManagementOpen(true)}
         onOpenChangeAdminPassword={handleOpenChangeAdminPassword}
         onLogout={handleLogout}
+        readOnly={isReadOnly}
       />
 
       {/* 2. Ribbon Menu Tabs and Toolbars */}
       <Ribbon
         activeTab={activeTab}
         onSelectTab={setActiveTab}
+        readOnly={isReadOnly}
         // Home tab
         selectedElement={selectedElement}
         onUpdateElement={handleUpdateElement}
@@ -1814,6 +1891,7 @@ export default function App() {
             onDeleteSlide={handleDeleteSlide}
             onCloseSorter={() => setViewMode('normal')}
             defaultSlideBg={currentTheme.slideBg}
+            readOnly={isReadOnly}
           />
         ) : (
           <>
@@ -1831,10 +1909,59 @@ export default function App() {
               onMoveSlide={handleMoveSlide}
               aspectRatio={presentation.aspectRatio}
               defaultSlideBg={currentTheme.slideBg}
+              readOnly={isReadOnly}
             />
 
             {/* Central Work Area */}
             <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Read-Only Informative Notice Banner */}
+              {isReadOnly && (
+                <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-xs text-amber-900 shrink-0 select-none shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <Lock size={15} className="text-amber-700 shrink-0" />
+                    <span>
+                      {!currentUser ? (
+                        <span>
+                          <strong>Chế độ xem & trình chiếu:</strong> Bạn chưa đăng nhập. Mọi thao tác chỉnh sửa, thêm, xóa slide đều yêu cầu đăng nhập.
+                        </span>
+                      ) : (
+                        <span>
+                          <strong>Chế độ xem & trình chiếu:</strong> Bài giảng của {presentation.creatorName || presentation.author || 'Quản trị viên / Hệ thống'}. Thành viên chỉ được xem và trình chiếu, không được sửa hoặc xóa slide của bài này.
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!currentUser ? (
+                      <button
+                        onClick={handleOpenAuthModal}
+                        className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded shadow-xs transition cursor-pointer"
+                      >
+                        Đăng nhập ngay
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleSaveCurrentToLibrary(true)}
+                          className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded shadow-xs transition flex items-center gap-1 cursor-pointer"
+                          title="Nhân bản bài này thành bài giảng của bạn để tự do chỉnh sửa"
+                        >
+                          <Copy size={12} />
+                          <span>Tạo bản sao để sửa</span>
+                        </button>
+                        <button
+                          onClick={handleNewPresentation}
+                          className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-semibold rounded shadow-xs transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus size={12} />
+                          <span>Soạn bài mới</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <SlideCanvas
                 slide={currentSlide}
                 defaultSlideBg={currentTheme.slideBg}
@@ -1850,6 +1977,7 @@ export default function App() {
                 previewAnimationElementId={previewAnimationElementId}
                 aspectRatio={presentation.aspectRatio}
                 zoomLevel={zoomLevel}
+                readOnly={isReadOnly}
               />
 
               {/* Bottom Speaker Notes Bar */}
@@ -1864,6 +1992,7 @@ export default function App() {
                 }}
                 isOpen={isNotesOpen}
                 onToggle={() => setIsNotesOpen(!isNotesOpen)}
+                readOnly={isReadOnly}
               />
             </div>
           </>

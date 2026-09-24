@@ -3,7 +3,7 @@ import { X, Save, BookOpen, GraduationCap, User, Palette, Ratio, Sparkles, Trash
 import { Presentation } from '../types/presentation';
 import { CurrentUser } from '../types/auth';
 import { PRESENTATION_THEMES } from '../data/defaultLectures';
-import { canDeletePresentation } from '../services/presentationCloudService';
+import { canDeletePresentation, canEditPresentation } from '../services/presentationCloudService';
 
 interface EditLectureModalProps {
   isOpen: boolean;
@@ -66,8 +66,14 @@ export const EditLectureModal: React.FC<EditLectureModalProps> = ({
 
   if (!isOpen || !presentation) return null;
 
+  const editPerm = canEditPresentation(presentation, currentUser);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editPerm.allowed) {
+      alert(editPerm.reason || 'Bạn không có quyền chỉnh sửa bài giảng này.');
+      return;
+    }
     if (!title.trim()) {
       alert('Vui lòng nhập tiêu đề bài giảng');
       return;
@@ -112,6 +118,16 @@ export const EditLectureModal: React.FC<EditLectureModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
+          {!editPerm.allowed && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2.5">
+              <Lock size={16} className="text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block mb-0.5">Chế độ xem bảo vệ:</span>
+                <span>{editPerm.reason}</span>
+              </div>
+            </div>
+          )}
+
           {/* Tiêu đề */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -298,10 +314,16 @@ export const EditLectureModal: React.FC<EditLectureModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 rounded-lg bg-[#c43e1c] hover:bg-[#a83214] text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md"
+                disabled={!editPerm.allowed}
+                className={`px-5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-md ${
+                  editPerm.allowed
+                    ? 'bg-[#c43e1c] hover:bg-[#a83214] text-white cursor-pointer'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
+                }`}
+                title={!editPerm.allowed ? editPerm.reason : 'Lưu thay đổi'}
               >
-                <Save size={14} />
-                <span>Lưu thay đổi</span>
+                {editPerm.allowed ? <Save size={14} /> : <Lock size={14} />}
+                <span>{editPerm.allowed ? 'Lưu thay đổi' : 'Chỉ xem (Không được sửa)'}</span>
               </button>
             </div>
           </div>

@@ -20,7 +20,8 @@ import {
   Sparkles,
   FileUp,
   Save,
-  Download
+  Download,
+  Lock
 } from 'lucide-react';
 import { SlideElement } from '../types/presentation';
 
@@ -35,6 +36,7 @@ interface HomeRibbonProps {
   onOpenImportPptx?: () => void;
   onExportPPTX?: () => void;
   onSave?: () => void;
+  readOnly?: boolean;
 }
 
 const FONT_FAMILIES = [
@@ -63,22 +65,37 @@ export const HomeRibbon: React.FC<HomeRibbonProps> = ({
   onAddSlide,
   onOpenImportPptx,
   onExportPPTX,
-  onSave
+  onSave,
+  readOnly = false
 }) => {
   const isTextLike = selectedElement && (selectedElement.type === 'text' || selectedElement.type === 'shape');
   const textElem = selectedElement?.type === 'text' ? selectedElement : null;
 
   return (
     <div className="flex items-stretch h-[82px] bg-[#f8f9fa] border-b border-[#dadce0] px-2 overflow-x-auto text-[11px] select-none text-slate-700">
+      {readOnly && (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 my-1.5 mr-2 bg-amber-100 border border-amber-300 rounded text-amber-900 font-semibold shrink-0">
+          <Lock size={14} className="text-amber-700" />
+          <div className="flex flex-col text-[10px] leading-tight">
+            <span className="font-bold">Chế độ Chỉ xem</span>
+            <span className="text-[9px] text-amber-800">Không thể sửa/xóa</span>
+          </div>
+        </div>
+      )}
+
       {/* 1. Trang chiếu & Lưu trữ (Slides & Save) */}
       <div className="flex flex-col items-center px-2 border-r border-[#dadce0] shrink-0 justify-between py-1">
         <div className="flex items-center space-x-1">
           <button
             onClick={onAddSlide}
             className="flex flex-col items-center justify-center p-1 rounded hover:bg-slate-200 transition w-13 h-[50px] group cursor-pointer"
-            title="Thêm trang chiếu mới"
+            title={readOnly ? "Đăng nhập hoặc tạo bản sao để thêm trang mới" : "Thêm trang chiếu mới"}
           >
-            <PlusSquare size={22} className="text-[#c43e1c] group-hover:scale-105 transition" />
+            {readOnly ? (
+              <Lock size={20} className="text-amber-600 group-hover:scale-105 transition" />
+            ) : (
+              <PlusSquare size={22} className="text-[#c43e1c] group-hover:scale-105 transition" />
+            )}
             <span className="text-[10.5px] leading-tight font-medium mt-0.5">Trang mới</span>
           </button>
 
@@ -119,7 +136,7 @@ export const HomeRibbon: React.FC<HomeRibbonProps> = ({
       </div>
 
       {/* 2. Phông chữ (Font Formatting) */}
-      <div className="flex flex-col px-2 border-r border-[#dadce0] shrink-0 justify-between py-1">
+      <div className={`flex flex-col px-2 border-r border-[#dadce0] shrink-0 justify-between py-1 ${readOnly ? 'opacity-50 pointer-events-none' : ''}`}>
         <div className="flex items-center space-x-1 mb-1">
           {/* Font Family */}
           <select
@@ -246,8 +263,8 @@ export const HomeRibbon: React.FC<HomeRibbonProps> = ({
         <div className="flex items-center space-x-1">
           <button
             onClick={onBringForward}
-            disabled={!selectedElement}
-            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-200 disabled:opacity-40 transition"
+            disabled={readOnly || !selectedElement}
+            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-200 disabled:opacity-40 transition cursor-pointer disabled:cursor-not-allowed"
             title="Đưa phần tử lên lớp trên"
           >
             <ArrowUp size={13} className="text-blue-600" />
@@ -256,8 +273,8 @@ export const HomeRibbon: React.FC<HomeRibbonProps> = ({
 
           <button
             onClick={onSendBackward}
-            disabled={!selectedElement}
-            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-200 disabled:opacity-40 transition"
+            disabled={readOnly || !selectedElement}
+            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-200 disabled:opacity-40 transition cursor-pointer disabled:cursor-not-allowed"
             title="Hạ phần tử xuống lớp dưới"
           >
             <ArrowDown size={13} className="text-slate-600" />
@@ -266,8 +283,8 @@ export const HomeRibbon: React.FC<HomeRibbonProps> = ({
 
           <button
             onClick={onDuplicateElement}
-            disabled={!selectedElement}
-            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-200 disabled:opacity-40 transition"
+            disabled={readOnly || !selectedElement}
+            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-200 disabled:opacity-40 transition cursor-pointer disabled:cursor-not-allowed"
             title="Nhân bản phần tử được chọn"
           >
             <Copy size={13} className="text-emerald-600" />
@@ -276,8 +293,8 @@ export const HomeRibbon: React.FC<HomeRibbonProps> = ({
 
           <button
             onClick={onDeleteElement}
-            disabled={!selectedElement}
-            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-red-100 text-red-600 disabled:opacity-40 transition"
+            disabled={readOnly || !selectedElement}
+            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-red-100 text-red-600 disabled:opacity-40 transition cursor-pointer disabled:cursor-not-allowed"
             title="Xóa phần tử (Delete / Backspace)"
           >
             <Trash2 size={13} />

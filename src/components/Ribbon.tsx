@@ -61,6 +61,7 @@ interface RibbonProps {
   onOpenRepository: () => void;
   onOpenImportPptx?: () => void;
   onExportPPTX?: () => void;
+  readOnly?: boolean;
 }
 
 export const Ribbon: React.FC<RibbonProps> = ({
@@ -74,6 +75,7 @@ export const Ribbon: React.FC<RibbonProps> = ({
   onSendBackward,
   onAddSlide,
   onSave,
+  readOnly = false,
   onOpenTablePicker,
   onOpenImagePicker,
   onAddCameo,
@@ -170,6 +172,7 @@ export const Ribbon: React.FC<RibbonProps> = ({
             onOpenImportPptx={onOpenImportPptx}
             onExportPPTX={onExportPPTX}
             onSave={onSave}
+            readOnly={readOnly}
           />
         )}
 
