@@ -194,10 +194,21 @@ export const TitleBar: React.FC<TitleBarProps> = ({
 
           <button
             onClick={onStartSlideShow}
-            title="Trình chiếu từ đầu (F5)"
-            className="p-1.5 rounded bg-emerald-600 hover:bg-emerald-500 font-medium transition flex items-center justify-center shadow-xs ml-0.5"
+            title={currentUser ? "Trình chiếu từ đầu (F5)" : "Khóa: Vui lòng đăng nhập để bắt đầu trình chiếu (F5)"}
+            className={`p-1.5 rounded font-medium transition flex items-center justify-center shadow-xs ml-0.5 cursor-pointer ${
+              currentUser 
+                ? "bg-emerald-600 hover:bg-emerald-500 text-white" 
+                : "bg-amber-600/90 hover:bg-amber-600 text-white border border-amber-300/40"
+            }`}
           >
-            <Play size={13} className="fill-current" />
+            {currentUser ? (
+              <Play size={13} className="fill-current" />
+            ) : (
+              <div className="flex items-center gap-1 px-0.5" title="Khóa trình chiếu (Cần đăng nhập)">
+                <Lock size={12} className="text-white" />
+                <span className="text-[10px] font-bold">F5</span>
+              </div>
+            )}
           </button>
         </div>
       </div>

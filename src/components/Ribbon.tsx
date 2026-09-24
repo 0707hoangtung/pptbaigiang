@@ -62,6 +62,7 @@ interface RibbonProps {
   onOpenImportPptx?: () => void;
   onExportPPTX?: () => void;
   readOnly?: boolean;
+  isLoggedIn?: boolean;
 }
 
 export const Ribbon: React.FC<RibbonProps> = ({
@@ -76,6 +77,7 @@ export const Ribbon: React.FC<RibbonProps> = ({
   onAddSlide,
   onSave,
   readOnly = false,
+  isLoggedIn = false,
   onOpenTablePicker,
   onOpenImagePicker,
   onAddCameo,
@@ -237,6 +239,7 @@ export const Ribbon: React.FC<RibbonProps> = ({
             onPresenterMode={onPresenterMode}
             onTriggerConfetti={onTriggerConfetti}
             onOpenImportPptx={onOpenImportPptx}
+            isLoggedIn={isLoggedIn}
           />
         )}
 

@@ -291,6 +291,32 @@ export default function App() {
     return true;
   }, [currentUser, presentation]);
 
+  const checkSlideShowPermission = useCallback((): boolean => {
+    if (!currentUser) {
+      showToast('🔒 Vui lòng đăng nhập tài khoản để sử dụng tính năng trình chiếu bài giảng!');
+      handleOpenAuthModal();
+      return false;
+    }
+    return true;
+  }, [currentUser]);
+
+  const handleStartSlideShow = useCallback((fromIndex?: number) => {
+    if (!checkSlideShowPermission()) return;
+    if (typeof fromIndex === 'number') {
+      setActiveSlideIndex(fromIndex);
+    }
+    setViewMode('slideshow');
+  }, [checkSlideShowPermission]);
+
+  // Guard against unauthenticated users in slideshow mode
+  useEffect(() => {
+    if (!currentUser && viewMode === 'slideshow') {
+      setViewMode('normal');
+      showToast('🔒 Vui lòng đăng nhập tài khoản để sử dụng tính năng trình chiếu bài giảng!');
+      handleOpenAuthModal();
+    }
+  }, [currentUser, viewMode]);
+
   const handleOpenAuthModal = () => {
     setAuthModalMode('login');
     setIsAuthModalOpen(true);
@@ -444,7 +470,7 @@ export default function App() {
 
       if (e.key === 'F5') {
         e.preventDefault();
-        setViewMode('slideshow');
+        handleStartSlideShow(0);
       } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         handleManualSave();
@@ -476,7 +502,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeSlideIndex, presentation.slides.length, selectedElementId, historyIndex, history]);
+  }, [activeSlideIndex, presentation.slides.length, selectedElementId, historyIndex, history, handleStartSlideShow]);
 
   // Global Paste listener for pasting image into Text Box (Hộp chữ) or slide canvas
   useEffect(() => {
@@ -1679,6 +1705,7 @@ export default function App() {
   };
 
   const handleOpenPptxForSlideShow = (importedPresentation: Presentation) => {
+    if (!checkSlideShowPermission()) return;
     let creatorProps: Partial<Presentation> = {};
     if (currentUser?.role === 'super_admin') {
       creatorProps = {
@@ -1777,7 +1804,7 @@ export default function App() {
         onRedo={handleRedo}
         canUndo={historyIndex >= 0}
         canRedo={historyIndex < history.length - 1}
-        onStartSlideShow={() => setViewMode('slideshow')}
+        onStartSlideShow={() => handleStartSlideShow(0)}
         onOpenRepository={() => setIsRepositoryOpen(true)}
         onOpenImportPptx={() => setIsImportPptxOpen(true)}
         onExportPPTX={handleExportPPTX}
@@ -1869,14 +1896,12 @@ export default function App() {
         onPreviewAnimation={handlePreviewAnimation}
         onMoveAnimationOrder={handleMoveAnimationOrder}
         // Slide Show tab
-        onStartFromBeginning={() => {
-          setActiveSlideIndex(0);
-          setViewMode('slideshow');
-        }}
-        onStartFromCurrent={() => setViewMode('slideshow')}
-        onPresenterMode={() => setViewMode('slideshow')}
-        onTriggerConfetti={() => setViewMode('slideshow')}
+        onStartFromBeginning={() => handleStartSlideShow(0)}
+        onStartFromCurrent={() => handleStartSlideShow(activeSlideIndex)}
+        onPresenterMode={() => handleStartSlideShow(activeSlideIndex)}
+        onTriggerConfetti={() => handleStartSlideShow(activeSlideIndex)}
         onOpenRepository={() => setIsRepositoryOpen(true)}
+        isLoggedIn={Boolean(currentUser)}
       />
 
       {/* 3. Main Body View (Normal Editor or Slide Sorter) */}
@@ -1922,7 +1947,7 @@ export default function App() {
                     <span>
                       {!currentUser ? (
                         <span>
-                          <strong>Chế độ xem & trình chiếu:</strong> Bạn chưa đăng nhập. Mọi thao tác chỉnh sửa, thêm, xóa slide đều yêu cầu đăng nhập.
+                          <strong>Chế độ khóa an toàn:</strong> Bạn chưa đăng nhập. Mọi chế độ trình chiếu (F5), chỉnh sửa, thêm hoặc xóa slide đều bị khóa. Vui lòng đăng nhập tài khoản để sử dụng!
                         </span>
                       ) : (
                         <span>
@@ -2006,7 +2031,13 @@ export default function App() {
         isNotesOpen={isNotesOpen}
         onToggleNotes={() => setIsNotesOpen(!isNotesOpen)}
         viewMode={viewMode}
-        onChangeViewMode={setViewMode}
+        onChangeViewMode={(mode) => {
+          if (mode === 'slideshow') {
+            handleStartSlideShow();
+          } else {
+            setViewMode(mode);
+          }
+        }}
         zoomLevel={zoomLevel}
         onChangeZoom={setZoomLevel}
         onFitToWindow={() => setZoomLevel(67)}
@@ -2014,17 +2045,20 @@ export default function App() {
         lastSavedTime={lastSavedTime}
         isRealtimeSyncing={isRealtimeSyncing}
         isOnline={isOnline}
+        isLoggedIn={Boolean(currentUser)}
       />
 
-      {/* 5. Fullscreen Presentation Mode Modal */}
-      <SlideShowModal
-        isOpen={viewMode === 'slideshow'}
-        onClose={() => setViewMode('normal')}
-        slides={presentation.slides}
-        initialSlideIndex={activeSlideIndex}
-        aspectRatio={presentation.aspectRatio}
-        defaultSlideBg={currentTheme.slideBg}
-      />
+      {/* 5. Fullscreen Presentation Mode Modal - Locked if not logged in */}
+      {currentUser && (
+        <SlideShowModal
+          isOpen={viewMode === 'slideshow'}
+          onClose={() => setViewMode('normal')}
+          slides={presentation.slides}
+          initialSlideIndex={activeSlideIndex}
+          aspectRatio={presentation.aspectRatio}
+          defaultSlideBg={currentTheme.slideBg}
+        />
+      )}
 
       {/* 6. Kho Bài Giảng (Repository) Modal with Full Edit & Delete Permissions */}
       <LectureRepositoryModal
@@ -2068,6 +2102,8 @@ export default function App() {
         onOpenForSlideShow={handleOpenPptxForSlideShow}
         onSaveToLibrary={handleSavePptxToLibrary}
         initialFile={pptxInitialFile}
+        isLoggedIn={Boolean(currentUser)}
+        onRequireLogin={handleOpenAuthModal}
       />
 
       {/* Global Drag-and-drop Overlay */}

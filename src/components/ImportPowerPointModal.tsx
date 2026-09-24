@@ -13,7 +13,8 @@ import {
   Ratio,
   ArrowRight,
   Sparkles,
-  Loader2
+  Loader2,
+  Lock
 } from 'lucide-react';
 import { Presentation } from '../types/presentation';
 import { parsePowerPointFile, PptxImportResult } from '../utils/pptxImporter';
@@ -25,6 +26,8 @@ interface ImportPowerPointModalProps {
   onOpenForSlideShow: (presentation: Presentation) => void;
   onSaveToLibrary: (presentation: Presentation) => void;
   initialFile?: File | null;
+  isLoggedIn?: boolean;
+  onRequireLogin?: () => void;
 }
 
 export const ImportPowerPointModal: React.FC<ImportPowerPointModalProps> = ({
@@ -33,7 +36,9 @@ export const ImportPowerPointModal: React.FC<ImportPowerPointModalProps> = ({
   onOpenForEdit,
   onOpenForSlideShow,
   onSaveToLibrary,
-  initialFile = null
+  initialFile = null,
+  isLoggedIn = false,
+  onRequireLogin
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -128,6 +133,12 @@ export const ImportPowerPointModal: React.FC<ImportPowerPointModalProps> = ({
   };
 
   const handleSlideShowClick = () => {
+    if (!isLoggedIn) {
+      if (onRequireLogin) {
+        onRequireLogin();
+      }
+      return;
+    }
     const pres = getFinalPresentation();
     onOpenForSlideShow(pres);
     onClose();
@@ -371,14 +382,29 @@ export const ImportPowerPointModal: React.FC<ImportPowerPointModalProps> = ({
                   {/* Option 1: Trình chiếu ngay */}
                   <button
                     onClick={handleSlideShowClick}
-                    className="p-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition flex flex-col items-center justify-center gap-1.5 shadow-md group cursor-pointer"
+                    className={`p-3.5 rounded-xl font-bold transition flex flex-col items-center justify-center gap-1.5 shadow-md group cursor-pointer ${
+                      !isLoggedIn
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    }`}
                   >
                     <div className="flex items-center gap-1.5 text-sm font-extrabold">
-                      <Play size={16} className="fill-current" />
-                      <span>Trình chiếu ngay</span>
+                      {!isLoggedIn ? (
+                        <>
+                          <Lock size={16} className="text-amber-200" />
+                          <span>Trình chiếu (Cần đăng nhập)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play size={16} className="fill-current" />
+                          <span>Trình chiếu ngay</span>
+                        </>
+                      )}
                     </div>
-                    <span className="text-[10px] font-normal text-emerald-100 text-center">
-                      Mở toàn màn hình (F5) để giảng dạy ngay lập tức
+                    <span className="text-[10px] font-normal text-white/90 text-center">
+                      {!isLoggedIn
+                        ? 'Vui lòng đăng nhập để mở chế độ trình chiếu toàn màn hình (F5)'
+                        : 'Mở toàn màn hình (F5) để giảng dạy ngay lập tức'}
                     </span>
                   </button>
 

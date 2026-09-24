@@ -14,7 +14,8 @@ import {
   BookOpen,
   FastForward,
   Eye,
-  FileUp
+  FileUp,
+  Lock
 } from 'lucide-react';
 import { TransitionType } from '../types/presentation';
 
@@ -81,6 +82,7 @@ interface SlideShowRibbonProps {
   onPresenterMode: () => void;
   onTriggerConfetti: () => void;
   onOpenImportPptx?: () => void;
+  isLoggedIn?: boolean;
 }
 
 export const SlideShowRibbon: React.FC<SlideShowRibbonProps> = ({
@@ -88,33 +90,64 @@ export const SlideShowRibbon: React.FC<SlideShowRibbonProps> = ({
   onStartFromCurrent,
   onPresenterMode,
   onTriggerConfetti,
-  onOpenImportPptx
+  onOpenImportPptx,
+  isLoggedIn = false
 }) => {
   return (
     <div className="flex items-stretch h-[82px] bg-[#f8f9fa] border-b border-[#dadce0] px-2 overflow-x-auto text-[11px] select-none text-slate-700">
+      {!isLoggedIn && (
+        <div className="flex items-center gap-1.5 px-3 py-1 my-1.5 bg-amber-100/90 text-amber-900 rounded-lg border border-amber-300 text-xs font-bold mr-2 shrink-0 shadow-2xs">
+          <Lock size={15} className="text-amber-700 shrink-0" />
+          <div className="flex flex-col">
+            <span>Chế độ trình chiếu đang khóa</span>
+            <span className="text-[10px] text-amber-800 font-normal">Vui lòng đăng nhập để sử dụng</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col px-2 border-r border-[#dadce0] shrink-0 justify-between py-1">
         <div className="flex items-center space-x-2">
           <button
             onClick={onStartFromBeginning}
-            className="flex flex-col items-center justify-center p-1.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition w-20 h-[50px] group"
+            className={`flex flex-col items-center justify-center p-1.5 rounded transition w-22 h-[50px] group cursor-pointer ${
+              !isLoggedIn 
+                ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300' 
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300'
+            }`}
+            title={isLoggedIn ? "Bắt đầu trình chiếu từ đầu (F5)" : "Khóa: Vui lòng đăng nhập để bắt đầu trình chiếu (F5)"}
           >
-            <Play size={22} className="text-emerald-600 fill-current group-hover:scale-110 transition" />
-            <span className="text-[10.5px] font-bold mt-0.5">Từ đầu (F5)</span>
+            <div className="relative">
+              <Play size={20} className={!isLoggedIn ? "text-amber-700 fill-current" : "text-emerald-600 fill-current group-hover:scale-110 transition"} />
+              {!isLoggedIn && (
+                <Lock size={11} className="absolute -top-1 -right-2 text-amber-700 drop-shadow-xs" />
+              )}
+            </div>
+            <span className="text-[10.5px] font-bold mt-0.5">{isLoggedIn ? "Từ đầu (F5)" : "Khóa (F5)"}</span>
           </button>
 
           <button
             onClick={onStartFromCurrent}
-            className="flex flex-col items-center justify-center p-1.5 rounded hover:bg-slate-200 transition w-22 h-[50px]"
+            className={`flex flex-col items-center justify-center p-1.5 rounded transition w-22 h-[50px] cursor-pointer ${
+              !isLoggedIn
+                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                : 'hover:bg-slate-200 text-slate-700'
+            }`}
+            title={isLoggedIn ? "Trình chiếu từ trang hiện tại" : "Khóa: Vui lòng đăng nhập để bắt đầu trình chiếu"}
           >
-            <FastForward size={22} className="text-blue-600" />
-            <span className="text-[10.5px] font-medium mt-0.5">Từ trang hiện tại</span>
+            <div className="relative">
+              <FastForward size={20} className={!isLoggedIn ? "text-slate-500" : "text-blue-600"} />
+              {!isLoggedIn && (
+                <Lock size={11} className="absolute -top-1 -right-2 text-amber-700 drop-shadow-xs" />
+              )}
+            </div>
+            <span className="text-[10.5px] font-medium mt-0.5">Từ trang này</span>
           </button>
 
           {onOpenImportPptx && (
             <button
               onClick={onOpenImportPptx}
-              className="flex flex-col items-center justify-center p-1.5 rounded bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200 transition w-22 h-[50px] group"
-              title="Nhập bài giảng có sẵn từ file PowerPoint (.pptx) để trình chiếu"
+              className="flex flex-col items-center justify-center p-1.5 rounded bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200 transition w-22 h-[50px] group cursor-pointer"
+              title="Nhập bài giảng có sẵn từ file PowerPoint (.pptx)"
             >
               <FileUp size={20} className="text-[#c43e1c] group-hover:scale-110 transition" />
               <span className="text-[10.5px] font-bold mt-0.5">Nhập PPTX</span>
@@ -127,10 +160,19 @@ export const SlideShowRibbon: React.FC<SlideShowRibbonProps> = ({
       <div className="flex flex-col px-2 border-r border-[#dadce0] shrink-0 justify-between py-1">
         <button
           onClick={onPresenterMode}
-          className="flex flex-col items-center justify-center p-1.5 rounded hover:bg-slate-200 transition w-24 h-[50px]"
-          title="Chế độ diễn giả cho giáo viên (hiển thị đồng hồ, ghi chú và slide tiếp theo)"
+          className={`flex flex-col items-center justify-center p-1.5 rounded transition w-24 h-[50px] cursor-pointer ${
+            !isLoggedIn
+              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+              : 'hover:bg-slate-200 text-slate-700'
+          }`}
+          title={isLoggedIn ? "Chế độ diễn giả cho giáo viên (hiển thị đồng hồ, ghi chú và slide tiếp theo)" : "Khóa: Vui lòng đăng nhập để sử dụng"}
         >
-          <Tv size={22} className="text-purple-600" />
+          <div className="relative">
+            <Tv size={20} className={!isLoggedIn ? "text-slate-500" : "text-purple-600"} />
+            {!isLoggedIn && (
+              <Lock size={11} className="absolute -top-1 -right-2 text-amber-700 drop-shadow-xs" />
+            )}
+          </div>
           <span className="text-[10.5px] font-bold mt-0.5">Chế độ Diễn giả</span>
         </button>
         <span className="text-[10px] text-slate-400 font-medium text-center">Màn hình diễn giả</span>
@@ -139,10 +181,19 @@ export const SlideShowRibbon: React.FC<SlideShowRibbonProps> = ({
       <div className="flex flex-col px-2 shrink-0 justify-between py-1">
         <button
           onClick={onTriggerConfetti}
-          className="flex flex-col items-center justify-center p-1.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition w-24 h-[50px]"
-          title="Bắn pháo hoa khen ngợi học sinh khi trả lời đúng"
+          className={`flex flex-col items-center justify-center p-1.5 rounded transition w-24 h-[50px] cursor-pointer ${
+            !isLoggedIn
+              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+              : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300'
+          }`}
+          title={isLoggedIn ? "Bắn pháo hoa khen ngợi học sinh khi trả lời đúng" : "Khóa: Vui lòng đăng nhập để sử dụng"}
         >
-          <Sparkles size={22} className="text-amber-600" />
+          <div className="relative">
+            <Sparkles size={20} className={!isLoggedIn ? "text-slate-500" : "text-amber-600"} />
+            {!isLoggedIn && (
+              <Lock size={11} className="absolute -top-1 -right-2 text-amber-700 drop-shadow-xs" />
+            )}
+          </div>
           <span className="text-[10.5px] font-bold mt-0.5">Pháo hoa khen</span>
         </button>
         <span className="text-[10px] text-slate-400 font-medium text-center">Tương tác lớp học</span>

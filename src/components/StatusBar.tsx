@@ -11,7 +11,8 @@ import {
   Globe2, 
   CheckCircle2,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Lock
 } from 'lucide-react';
 import { ViewMode } from '../types/presentation';
 
@@ -29,6 +30,7 @@ interface StatusBarProps {
   lastSavedTime?: string;
   isRealtimeSyncing?: boolean;
   isOnline?: boolean;
+  isLoggedIn?: boolean;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -44,7 +46,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   currentTime,
   lastSavedTime,
   isRealtimeSyncing,
-  isOnline = true
+  isOnline = true,
+  isLoggedIn = false
 }) => {
   return (
     <div className="h-6.5 bg-[#f1f3f5] border-t border-[#dadce0] px-3 flex items-center justify-between text-[11px] text-slate-600 select-none shrink-0 z-20">
@@ -141,12 +144,23 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
           <button
             onClick={() => onChangeViewMode('slideshow')}
-            className={`p-1 rounded transition ${
-              viewMode === 'slideshow' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-200 text-emerald-700'
+            className={`p-1 rounded transition flex items-center gap-0.5 cursor-pointer ${
+              !isLoggedIn 
+                ? 'hover:bg-amber-100 text-amber-700 bg-amber-50/80 border border-amber-300/50' 
+                : viewMode === 'slideshow' 
+                  ? 'bg-emerald-600 text-white font-bold' 
+                  : 'hover:bg-slate-200 text-emerald-700'
             }`}
-            title="Bắt đầu trình chiếu toàn màn hình (Slide Show)"
+            title={isLoggedIn ? "Bắt đầu trình chiếu toàn màn hình (Slide Show)" : "Khóa: Vui lòng đăng nhập để bắt đầu trình chiếu bài giảng"}
           >
-            <Tv size={13} />
+            {isLoggedIn ? (
+              <Tv size={13} />
+            ) : (
+              <>
+                <Lock size={11} className="text-amber-600 shrink-0" />
+                <Tv size={12} className="opacity-80" />
+              </>
+            )}
           </button>
         </div>
 
