@@ -43,6 +43,8 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
   const [laserPos, setLaserPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPenActive, setIsPenActive] = useState(false);
   const [penColor, setPenColor] = useState<string>('#ef4444');
+  const [penWidth, setPenWidth] = useState<number>(6);
+  const [penCursorPos, setPenCursorPos] = useState<{ x: number; y: number } | null>(null);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [lessonSeconds, setLessonSeconds] = useState(0);
@@ -52,9 +54,12 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
   const canvasDrawRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const slideDrawingsRef = useRef<Record<number, string>>({});
 
   const currentSlide = slides[currentIndex];
   const slideBg = currentSlide?.backgroundColor || defaultSlideBg;
+  const canvasWidth = aspectRatio === '4:3' ? 1440 : 1920;
+  const canvasHeight = 1080;
 
   // Sorted animated elements for the current slide
   const animatedElements = (currentSlide?.elements || [])
@@ -66,9 +71,10 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
     setRevealedStep(0);
   }, [initialSlideIndex]);
 
-  // Reset revealedStep whenever slide changes
+  // Reset revealedStep and restore drawings whenever slide changes
   useEffect(() => {
     setRevealedStep(0);
+    restoreSlideDrawing(currentIndex);
   }, [currentIndex]);
 
   // Lesson timer and real-time clock
@@ -81,22 +87,49 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
     return () => clearInterval(timer);
   }, [isOpen]);
 
+  const saveCurrentSlideDrawing = () => {
+    const canvas = canvasDrawRef.current;
+    if (!canvas) return;
+    try {
+      slideDrawingsRef.current[currentIndex] = canvas.toDataURL();
+    } catch (e) {
+      console.warn('Could not save slide drawing:', e);
+    }
+  };
+
+  const restoreSlideDrawing = (slideIdx: number) => {
+    const canvas = canvasDrawRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const savedData = slideDrawingsRef.current[slideIdx];
+    if (savedData) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0);
+      };
+      img.src = savedData;
+    }
+  };
+
   const goToNextSlide = () => {
     if (currentIndex < slides.length - 1) {
+      saveCurrentSlideDrawing();
       setCurrentIndex(prev => prev + 1);
       setRevealedStep(0);
-      clearDrawings();
     }
   };
 
   const goToPrevSlide = () => {
     if (currentIndex > 0) {
+      saveCurrentSlideDrawing();
       const prevIdx = currentIndex - 1;
       const prevAnimatedCount = (slides[prevIdx]?.elements || [])
         .filter(el => el.animation && el.animation !== 'none').length;
       setCurrentIndex(prevIdx);
       setRevealedStep(prevAnimatedCount);
-      clearDrawings();
     }
   };
 
@@ -147,6 +180,7 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
     if (canvas) {
       const ctx = canvas.getContext('2d');
       if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      delete slideDrawingsRef.current[currentIndex];
     }
   };
 
@@ -158,51 +192,106 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
     });
   };
 
-  // Drawing Canvas logic
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isPenActive) return;
+  // Convert mouse screen coordinates to exact canvas buffer coordinates (1-to-1 pixel accuracy)
+  const getCanvasCoords = (clientX: number, clientY: number): { x: number; y: number } | null => {
     const canvas = canvasDrawRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    isDrawingRef.current = true;
-    lastPointRef.current = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+    if (!rect.width || !rect.height) return null;
+
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
     };
   };
 
-  const drawMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    // update laser pointer position if laser active
+  // Drawing Canvas logic - Precision tracking with Quadratic Bezier curve smoothing
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isPenActive) return;
+    const canvas = canvasDrawRef.current;
+    if (!canvas) return;
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+
+    const coords = getCanvasCoords(e.clientX, e.clientY);
+    if (!coords) return;
+
+    isDrawingRef.current = true;
+    lastPointRef.current = coords;
+
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      // Draw smooth starting dot for tap / single-click dots
+      ctx.beginPath();
+      ctx.arc(coords.x, coords.y, penWidth / 2, 0, Math.PI * 2);
+      ctx.fillStyle = penColor;
+      ctx.fill();
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (isLaserPointer) {
       setLaserPos({ x: e.clientX, y: e.clientY });
+    }
+    if (isPenActive) {
+      setPenCursorPos({ x: e.clientX, y: e.clientY });
     }
 
     if (!isPenActive || !isDrawingRef.current) return;
     const canvas = canvasDrawRef.current;
     if (!canvas || !lastPointRef.current) return;
 
-    const rect = canvas.getBoundingClientRect();
+    const coords = getCanvasCoords(e.clientX, e.clientY);
+    if (!coords) return;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const currentX = e.clientX - rect.left;
-    const currentY = e.clientY - rect.top;
+    // Smooth quadratic curve midpoint interpolation so strokes follow mouse movement seamlessly
+    const midX = (lastPointRef.current.x + coords.x) / 2;
+    const midY = (lastPointRef.current.y + coords.y) / 2;
 
     ctx.beginPath();
     ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
-    ctx.lineTo(currentX, currentY);
+    ctx.quadraticCurveTo(lastPointRef.current.x, lastPointRef.current.y, midX, midY);
     ctx.strokeStyle = penColor;
-    ctx.lineWidth = 4;
+    ctx.lineWidth = penWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.stroke();
 
-    lastPointRef.current = { x: currentX, y: currentY };
+    lastPointRef.current = coords;
   };
 
-  const stopDrawing = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isDrawingRef.current && canvasDrawRef.current && lastPointRef.current) {
+      const coords = getCanvasCoords(e.clientX, e.clientY);
+      if (coords) {
+        const ctx = canvasDrawRef.current.getContext('2d');
+        if (ctx) {
+          ctx.beginPath();
+          ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
+          ctx.lineTo(coords.x, coords.y);
+          ctx.strokeStyle = penColor;
+          ctx.lineWidth = penWidth;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
+      }
+      saveCurrentSlideDrawing();
+    }
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
     isDrawingRef.current = false;
     lastPointRef.current = null;
+  };
+
+  const handlePointerLeave = () => {
+    setPenCursorPos(null);
   };
 
   const formatTimer = (totalSec: number) => {
@@ -291,19 +380,37 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
           );
         })}
 
-        {/* Real-time Drawing Canvas layer */}
+        {/* Real-time Precision Drawing Canvas layer */}
         <canvas
           ref={canvasDrawRef}
-          width={1920}
-          height={1080}
-          onMouseDown={startDrawing}
-          onMouseMove={drawMove}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          className={`absolute inset-0 w-full h-full z-30 ${
-            isPenActive ? 'cursor-crosshair pointer-events-auto' : 'pointer-events-none'
+          width={canvasWidth}
+          height={canvasHeight}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onPointerLeave={handlePointerLeave}
+          className={`absolute inset-0 w-full h-full z-30 touch-none ${
+            isPenActive ? 'cursor-none pointer-events-auto' : 'pointer-events-none'
           }`}
         />
+
+        {/* Custom Precision Pen Tip Dot Cursor */}
+        {isPenActive && penCursorPos && (
+          <div
+            className="fixed pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center transition-none"
+            style={{ left: penCursorPos.x, top: penCursorPos.y }}
+          >
+            <div 
+              className="rounded-full shadow-md ring-1.5 ring-white/90"
+              style={{
+                width: Math.max(8, penWidth * 1.5),
+                height: Math.max(8, penWidth * 1.5),
+                backgroundColor: penColor
+              }}
+            />
+          </div>
+        )}
 
         {/* Laser Pointer Red Glowing Dot */}
         {isLaserPointer && (
@@ -409,31 +516,64 @@ export const SlideShowModal: React.FC<SlideShowModalProps> = ({
             setIsPenActive(!isPenActive);
             if (!isPenActive) setIsLaserPointer(false);
           }}
-          className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-            isPenActive ? 'bg-blue-600 text-white' : 'hover:bg-white/20 text-slate-300'
+          className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs ${
+            isPenActive ? 'bg-blue-600 text-white ring-2 ring-blue-300' : 'hover:bg-white/20 text-slate-300'
           }`}
-          title="Bật bút vẽ chú thích trực tiếp lên màn hình"
+          title="Bật bút vẽ chú thích theo đúng đường di chuột máy tính"
         >
           <PenTool size={13} />
           <span>Bút vẽ</span>
         </button>
 
         {isPenActive && (
-          <div className="flex items-center space-x-1 pl-1 border-l border-white/20">
-            {['#ef4444', '#eab308', '#ffffff', '#38bdf8'].map((c) => (
+          <div className="flex items-center space-x-1.5 pl-2 border-l border-white/20">
+            {/* Color Palette */}
+            {[
+              { color: '#ef4444', label: 'Đỏ' },
+              { color: '#eab308', label: 'Vàng' },
+              { color: '#22c55e', label: 'Xanh lá' },
+              { color: '#38bdf8', label: 'Xanh dương' },
+              { color: '#ffffff', label: 'Trắng' },
+              { color: '#a855f7', label: 'Tím' }
+            ].map(({ color, label }) => (
               <button
-                key={c}
-                onClick={() => setPenColor(c)}
-                className={`w-3.5 h-3.5 rounded-full border border-white/40 cursor-pointer ${penColor === c ? 'scale-125 ring-2 ring-white' : ''}`}
-                style={{ backgroundColor: c }}
+                key={color}
+                onClick={() => setPenColor(color)}
+                className={`w-4 h-4 rounded-full border border-white/50 cursor-pointer transition-transform ${
+                  penColor === color ? 'scale-125 ring-2 ring-white shadow-xs' : 'hover:scale-110 opacity-80 hover:opacity-100'
+                }`}
+                style={{ backgroundColor: color }}
+                title={`Màu ${label}`}
               />
             ))}
+
+            {/* Stroke Width Selector */}
+            <div className="flex items-center space-x-0.5 ml-1 bg-white/10 p-0.5 rounded-full">
+              {[
+                { size: 3, title: 'Nét mảnh (3px)', label: 'S' },
+                { size: 6, title: 'Nét vừa (6px - Chuẩn)', label: 'M' },
+                { size: 12, title: 'Nét đậm (12px)', label: 'L' }
+              ].map(({ size, title, label }) => (
+                <button
+                  key={size}
+                  onClick={() => setPenWidth(size)}
+                  className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full transition cursor-pointer ${
+                    penWidth === size ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-300 hover:text-white'
+                  }`}
+                  title={title}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Clear Drawings Button */}
             <button
               onClick={clearDrawings}
-              className="p-1 hover:bg-white/20 rounded-full text-slate-300 cursor-pointer"
-              title="Xóa nét vẽ"
+              className="p-1 hover:bg-red-500/40 rounded-full text-slate-300 hover:text-red-200 transition cursor-pointer ml-0.5"
+              title="Xóa tất cả nét vẽ trên trang này"
             >
-              <Eraser size={13} />
+              <Eraser size={14} />
             </button>
           </div>
         )}
